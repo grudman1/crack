@@ -1,0 +1,504 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ThumbsDown, ThumbsUp, Copy } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useRoom } from '@/hooks/useRoom';
+import { useRoomPlayers } from '@/hooks/useRoomPlayers';
+import { useSubmissions } from '@/hooks/useSubmissions';
+import { useVotes } from '@/hooks/useVotes';
+import { useScores } from '@/hooks/useScores';
+import {
+  computeScores,
+  joinRoom,
+  leaveRoom,
+  resetRoomForNewRound,
+  setRoomPhase,
+  upsertSubmission,
+  castVote,
+} from '@/services/roomService';
+import { generateRoundLetters, ALPHABET } from '@/services/sentenceService';
+import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
+import { TimerBar } from '@/components/TimerBar';
+import { PhaseBanner } from '@/components/PhaseBanner';
+import { ExportButtons } from '@/components/ExportButtons';
+import { toast } from '@/components/ui/toast';
+import { sanitizeError } from '@/lib/sanitizeError';
+import { cn } from '@/lib/utils';
+
+export default function Room() {
+  const { roomCode } = useParams<{ roomCode: string }>();
+  const { user } = useAuth();
+  const { room, loading } = useRoom(roomCode);
+  const players = useRoomPlayers(room?.id);
+  const submissions = useSubmissions(room?.id);
+  const votes = useVotes(room?.id);
+  const scores = useScores(room?.id);
+
+  const [answers, setAnswers] = useState<string[]>(() => Array(26).fill(''));
+  const [remaining, setRemaining] = useState(0);
+  const playStartRef = useRef<number | null>(null);
+  const tickRef = useRef<number | null>(null);
+
+  const isHost = !!user && !!room && room.host_id === user.id;
+
+  const myGridRows: GridRow[] = useMemo(() => answers.map((name) => ({ name })), [answers]);
+
+  // Auto-join on enter
+  useEffect(() => {
+    if (room && user) {
+      void joinRoom(room.id, user.id).catch(() => {});
+    }
+  }, [room, user]);
+
+  // Cleanup leave on unmount
+  useEffect(() => {
+    return () => {
+      if (room && user) void leaveRoom(room.id, user.id).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore my submissions
+  useEffect(() => {
+    if (!user || !room || !submissions.length) return;
+    const mine = submissions.filter((s) => s.player_id === user.id);
+    if (!mine.length) return;
+    setAnswers((curr) => {
+      const next = curr.slice();
+      mine.forEach((s) => {
+        next[s.row_index] = s.name;
+      });
+      return next;
+    });
+  }, [submissions, user, room]);
+
+  // Timer when playing
+  useEffect(() => {
+    if (!room || room.phase !== 'playing') {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+      tickRef.current = null;
+      return;
+    }
+    if (playStartRef.current === null) playStartRef.current = Date.now();
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - (playStartRef.current ?? Date.now())) / 1000);
+      const rem = Math.max(0, room.timer_seconds - elapsed);
+      setRemaining(rem);
+      if (rem <= 0 && isHost) {
+        void setRoomPhase(room.id, 'validating').catch(() => {});
+      }
+    };
+    update();
+    tickRef.current = window.setInterval(update, 1000);
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+      tickRef.current = null;
+    };
+  }, [room, isHost]);
+
+  // Reset start ref when phase moves
+  useEffect(() => {
+    if (room?.phase !== 'playing') playStartRef.current = null;
+  }, [room?.phase]);
+
+  if (loading) return <Centered>loading room…</Centered>;
+  if (!room)
+    return (
+      <Centered>
+        Room not found.{' '}
+        <Link to="/mp" className="underline">
+          back
+        </Link>
+      </Centered>
+    );
+  if (!user)
+    return (
+      <Centered>
+        Please sign in to play.{' '}
+        <Link to="/mp" className="underline">
+          back
+        </Link>
+      </Centered>
+    );
+
+  const handleSaveProgress = async () => {
+    if (!room || !user) return;
+    const letters = room.letters_26 ?? '';
+    try {
+      const writes = answers
+        .map((name, i) => ({ name: name.trim(), i }))
+        .filter((x) => x.name);
+      for (const w of writes) {
+        const initials = `${ALPHABET[w.i]}${letters[w.i] ?? ''}`;
+        await upsertSubmission(room.id, user.id, w.i, initials, w.name);
+      }
+      toast.success('Saved.');
+    } catch (e) {
+      toast.error(sanitizeError(e));
+    }
+  };
+
+  const handleStart = async () => {
+    if (!isHost || !room) return;
+    try {
+      const r = generateRoundLetters();
+      await setRoomPhase(room.id, 'playing', {
+        sentence: r.sentence,
+        letters_26: r.letters,
+      });
+    } catch (e) {
+      toast.error(sanitizeError(e));
+    }
+  };
+
+  const handleCompute = async () => {
+    if (!isHost || !room) return;
+    try {
+      await computeScores(room.id);
+      await setRoomPhase(room.id, 'results');
+    } catch (e) {
+      toast.error(sanitizeError(e));
+    }
+  };
+
+  const handleNewRound = async () => {
+    if (!isHost || !room) return;
+    try {
+      const r = generateRoundLetters();
+      await resetRoomForNewRound(room.id, r.sentence, r.letters, room.timer_seconds);
+      setAnswers(Array(26).fill(''));
+    } catch (e) {
+      toast.error(sanitizeError(e));
+    }
+  };
+
+  const handleChangeAnswer = (i: number, value: string) => {
+    setAnswers((curr) => {
+      const next = curr.slice();
+      next[i] = value;
+      return next;
+    });
+  };
+
+  const copyCode = async () => {
+    if (!room) return;
+    try {
+      await navigator.clipboard.writeText(room.code);
+      toast.success('Code copied.');
+    } catch {
+      toast.error('Could not copy.');
+    }
+  };
+
+  if (room.phase === 'lobby') {
+    return (
+      <motion.div
+        className="mx-auto max-w-2xl px-6 py-10"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+      >
+        <PhaseBanner phase="Lobby" />
+        <div className="paper-card p-6 mt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-hand text-xl text-ink-soft">room code</div>
+              <div className="font-display text-4xl tracking-widest">{room.code}</div>
+            </div>
+            <button className="btn-paper inline-flex items-center gap-2" onClick={copyCode}>
+              <Copy className="h-4 w-4" /> copy
+            </button>
+          </div>
+          <div className="mt-6">
+            <div className="font-hand text-xl text-ink-soft">players</div>
+            <ul className="mt-1 space-y-1">
+              {players.map((p) => (
+                <li key={p.id} className="font-body">
+                  {p.profile?.display_name ?? 'Player'}
+                  {p.player_id === room.host_id && <span className="text-ink-soft"> (host)</span>}
+                </li>
+              ))}
+              {players.length === 0 && <li className="font-body text-ink-soft">waiting…</li>}
+            </ul>
+          </div>
+          {isHost ? (
+            <div className="mt-6 flex items-center gap-3">
+              <label className="font-hand text-lg text-ink-soft">timer</label>
+              <select
+                className="ink-input border-b border-ink/40 py-1"
+                value={room.timer_seconds}
+                onChange={async (e) => {
+                  await setRoomPhase(room.id, 'lobby', { timer_seconds: Number(e.target.value) });
+                }}
+              >
+                <option value={120}>2 min</option>
+                <option value={180}>3 min</option>
+                <option value={300}>5 min</option>
+                <option value={420}>7 min</option>
+              </select>
+              <button
+                className="btn-paper btn-paper--primary"
+                onClick={handleStart}
+                disabled={players.length < 2}
+              >
+                Start game
+              </button>
+            </div>
+          ) : (
+            <div className="mt-6 font-hand text-xl text-ink-soft">waiting for host to start…</div>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (room.phase === 'playing') {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-6">
+        <div className="flex items-center justify-between mb-3">
+          <PhaseBanner phase="Round in play" />
+          <button className="btn-paper text-sm" onClick={handleSaveProgress}>
+            Save progress
+          </button>
+        </div>
+        <TimerBar remaining={remaining} total={room.timer_seconds} />
+        <div className="mt-4">
+          <InitialsGrid letters={room.letters_26 ?? ''} rows={myGridRows} onChange={handleChangeAnswer} />
+        </div>
+      </div>
+    );
+  }
+
+  if (room.phase === 'validating') {
+    return (
+      <ValidatingView
+        letters={room.letters_26 ?? ''}
+        submissions={submissions}
+        votes={votes}
+        userId={user.id}
+        onVote={(submissionId, isValid) => castVote(room.id, submissionId, user.id, isValid)}
+        isHost={isHost}
+        onCompute={handleCompute}
+      />
+    );
+  }
+
+  // results
+  return (
+    <ResultsView
+      letters={room.letters_26 ?? ''}
+      sentence={room.sentence ?? ''}
+      submissions={submissions}
+      players={players}
+      scores={scores}
+      userId={user.id}
+      isHost={isHost}
+      onNewRound={handleNewRound}
+    />
+  );
+}
+
+function ValidatingView({
+  letters,
+  submissions,
+  votes,
+  userId,
+  onVote,
+  isHost,
+  onCompute,
+}: {
+  letters: string;
+  submissions: ReturnType<typeof useSubmissions>;
+  votes: ReturnType<typeof useVotes>;
+  userId: string;
+  onVote: (submissionId: string, isValid: boolean) => Promise<void>;
+  isHost: boolean;
+  onCompute: () => void;
+}) {
+  const byRow = useMemo(() => {
+    const m: Record<number, typeof submissions> = {};
+    for (let i = 0; i < 26; i++) m[i] = [];
+    for (const s of submissions) {
+      if (!m[s.row_index]) m[s.row_index] = [];
+      m[s.row_index]!.push(s);
+    }
+    return m;
+  }, [submissions]);
+
+  const myVote = (submissionId: string) => votes.find((v) => v.submission_id === submissionId && v.voter_id === userId);
+  const tally = (submissionId: string) => {
+    const yes = votes.filter((v) => v.submission_id === submissionId && v.is_valid).length;
+    const no = votes.filter((v) => v.submission_id === submissionId && !v.is_valid).length;
+    return { yes, no };
+  };
+
+  return (
+    <div className="mx-auto max-w-3xl px-6 py-6">
+      <div className="flex items-center justify-between mb-3">
+        <PhaseBanner phase="Validating" />
+        {isHost && (
+          <button className="btn-paper btn-paper--primary" onClick={onCompute}>
+            Compute scores
+          </button>
+        )}
+      </div>
+      <div className="paper-card divide-y divide-ink/15">
+        {Array.from({ length: 26 }, (_, i) => i).map((i) => {
+          const subs = byRow[i] ?? [];
+          if (subs.length === 0) return null;
+          const initials = `${ALPHABET[i]}${letters[i] ?? ''}`;
+          return (
+            <div key={i} className="p-3">
+              <div className="font-display text-lg">{initials}</div>
+              <ul className="mt-1 space-y-1">
+                {subs.map((s) => {
+                  const t = tally(s.id);
+                  const mine = s.player_id === userId;
+                  const v = myVote(s.id);
+                  return (
+                    <li key={s.id} className="flex items-center gap-3">
+                      <span className="font-body flex-1">{s.name || <em className="text-ink-soft">(blank)</em>}</span>
+                      <span className="font-hand text-base text-ink-soft" aria-label="votes">
+                        {t.yes} / {t.yes + t.no}
+                      </span>
+                      {!mine ? (
+                        <>
+                          <button
+                            className={cn('btn-paper px-2 py-1 text-sm', v?.is_valid && 'btn-paper--primary')}
+                            onClick={() => void onVote(s.id, true)}
+                            aria-label="valid"
+                          >
+                            <ThumbsUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            className={cn('btn-paper px-2 py-1 text-sm', v && !v.is_valid && 'btn-paper--danger')}
+                            onClick={() => void onVote(s.id, false)}
+                            aria-label="invalid"
+                          >
+                            <ThumbsDown className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="font-hand text-sm text-ink-soft">yours</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResultsView({
+  letters,
+  sentence,
+  submissions,
+  players,
+  scores,
+  userId,
+  isHost,
+  onNewRound,
+}: {
+  letters: string;
+  sentence: string;
+  submissions: ReturnType<typeof useSubmissions>;
+  players: ReturnType<typeof useRoomPlayers>;
+  scores: ReturnType<typeof useScores>;
+  userId: string;
+  isHost: boolean;
+  onNewRound: () => void;
+}) {
+  const sorted = [...scores].sort((a, b) => b.total - a.total);
+  const me = scores.find((s) => s.player_id === userId);
+  const myRows = submissions.filter((s) => s.player_id === userId);
+
+  return (
+    <motion.div
+      className="mx-auto max-w-2xl px-6 py-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <PhaseBanner phase="Results" />
+        {isHost && (
+          <button className="btn-paper btn-paper--primary" onClick={onNewRound}>
+            New round
+          </button>
+        )}
+      </div>
+      <div className="paper-card p-4">
+        <h2 className="font-display text-xl uppercase">Leaderboard</h2>
+        <ol className="mt-2 space-y-1">
+          {sorted.map((s, idx) => {
+            const player = players.find((p) => p.player_id === s.player_id);
+            return (
+              <li key={s.id} className="flex items-baseline justify-between font-body">
+                <span>
+                  <span className="font-hand text-xl text-ink-soft mr-2">{idx + 1}.</span>
+                  {player?.profile?.display_name ?? 'Player'}
+                </span>
+                <span className="font-hand text-2xl text-ink">{s.total}</span>
+              </li>
+            );
+          })}
+          {sorted.length === 0 && <li className="font-body text-ink-soft">no scores yet</li>}
+        </ol>
+      </div>
+
+      {me && (
+        <details className="paper-card p-4 mt-4">
+          <summary className="cursor-pointer font-hand text-xl">your breakdown</summary>
+          <ul className="mt-2 text-sm font-body">
+            {Object.entries(me.breakdown ?? {})
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([row, pts]) => {
+                const rowIdx = Number(row);
+                const sub = myRows.find((s) => s.row_index === rowIdx);
+                return (
+                  <li key={row} className="flex justify-between">
+                    <span>
+                      <span className="font-display mr-2">{ALPHABET[rowIdx]}{letters[rowIdx] ?? ''}</span>
+                      {sub?.name ?? '—'}
+                    </span>
+                    <span className="font-hand text-base">{pts}</span>
+                  </li>
+                );
+              })}
+          </ul>
+        </details>
+      )}
+
+      <div className="mt-6">
+        <ExportButtons
+          payload={{
+            title: 'CRACK Multiplayer · my results',
+            sentence,
+            letters,
+            totalScore: me?.total,
+            rows: Array.from({ length: 26 }, (_, i) => {
+              const sub = myRows.find((s) => s.row_index === i);
+              const pts = me?.breakdown?.[String(i)] ?? 0;
+              return {
+                rowIndex: i,
+                initials: `${ALPHABET[i]}${letters[i] ?? ''}`,
+                name: sub?.name ?? '',
+                status: sub ? (pts > 0 ? 'valid' : 'invalid') : 'unanswered',
+                points: pts,
+              };
+            }),
+          }}
+        />
+      </div>
+    </motion.div>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return <div className="mx-auto max-w-md px-6 py-12 text-center font-hand text-2xl">{children}</div>;
+}
