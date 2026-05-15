@@ -221,8 +221,34 @@ end;
 $$;
 
 -- Enable realtime
-alter publication supabase_realtime add table public.rooms;
-alter publication supabase_realtime add table public.room_players;
-alter publication supabase_realtime add table public.submissions;
-alter publication supabase_realtime add table public.votes;
-alter publication supabase_realtime add table public.scores;
+DO $$
+DECLARE
+  _tables text[] := ARRAY[
+    'public.rooms',
+    'public.room_players',
+    'public.submissions',
+    'public.votes',
+    'public.scores'
+  ];
+  _t text;
+  _schema text;
+  _rel text;
+BEGIN
+  FOREACH _t IN ARRAY _tables LOOP
+    _schema := split_part(_t, '.', 1);
+    _rel := split_part(_t, '.', 2);
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_publication p
+      JOIN pg_publication_rel pr ON pr.prpubid = p.oid
+      JOIN pg_class c ON c.oid = pr.prrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE p.pubname = 'supabase_realtime'
+        AND n.nspname = _schema
+        AND c.relname = _rel
+    ) THEN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE %I.%I;', _schema, _rel);
+    END IF;
+  END LOOP;
+END $$;
