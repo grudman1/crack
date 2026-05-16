@@ -69,19 +69,26 @@ export function InitialsGrid({
             >
               <ScrabbleTile letter={alpha} size="sm" />
               <ScrabbleTile letter={round} size="sm" />
-              <input
-                ref={(el) => {
-                  refs.current[i] = el;
-                }}
-                className={cn('ink-input font-hand text-xl py-0', stateColor)}
-                value={row.name}
-                onChange={(e) => onChange?.(i, e.target.value)}
-                onKeyDown={(e) => handleKey(i, e)}
-                disabled={readOnly}
-                aria-label={`Answer for ${alpha}${round}`}
-                spellCheck={false}
-                autoComplete="off"
-              />
+              <div className="flex items-center gap-3 min-w-0">
+                <input
+                  ref={(el) => {
+                    refs.current[i] = el;
+                  }}
+                  className={cn('ink-input font-hand text-xl py-0 flex-1 min-w-0', stateColor)}
+                  value={row.name}
+                  onChange={(e) => onChange?.(i, e.target.value)}
+                  onKeyDown={(e) => handleKey(i, e)}
+                  disabled={readOnly}
+                  aria-label={`Answer for ${alpha}${round}`}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                {showResults && status === 'invalid' && row.reason && (
+                  <span className="font-body text-xs text-accent-red whitespace-nowrap overflow-hidden text-ellipsis">
+                    {row.reason}
+                  </span>
+                )}
+              </div>
               <div className="pr-2 text-right font-hand text-xl">
                 {showResults && status === 'valid' && (
                   <span className="text-accent-green">✓ {row.points ?? 0}</span>
@@ -89,16 +96,6 @@ export function InitialsGrid({
                 {showResults && status === 'invalid' && <span className="text-accent-red">✗</span>}
                 {showResults && status === 'unanswered' && <span className="text-ink-soft">—</span>}
               </div>
-              {showResults && row.reason && status === 'invalid' && (
-                <div className="col-span-4 -mt-1 pl-[88px] text-xs font-body text-accent-red/80">
-                  {row.reason}
-                </div>
-              )}
-              {showResults && row.canonicalName && row.canonicalName !== row.name && status === 'valid' && (
-                <div className="col-span-4 -mt-1 pl-[88px] text-xs font-body text-ink-soft">
-                  Accepted as {row.canonicalName}
-                </div>
-              )}
             </div>
           );
         })}

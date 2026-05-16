@@ -77,7 +77,7 @@ export default function Solo() {
           next[i] = {
             ...next[i]!,
             status: 'invalid',
-            reason: `Initials do not match. Expected ${expected}, got ${localInitials}.`,
+            reason: `expected ${expected}, got ${localInitials}`,
             points: 0,
           };
         } else {

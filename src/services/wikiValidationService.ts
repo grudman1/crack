@@ -133,7 +133,7 @@ export interface ValidateOptions {
 
 export async function validateName(name: string, opts: ValidateOptions = {}): Promise<ValidationResult> {
   const trimmed = (name ?? '').trim();
-  if (!trimmed) return { status: 'invalid', reason: 'Empty answer.' };
+  if (!trimmed) return { status: 'invalid', reason: 'empty answer' };
 
   const cacheKey = `${trimmed.toLowerCase()}|${opts.expectedInitials ?? ''}`;
   const cached = cache.get(cacheKey);
@@ -146,37 +146,37 @@ export async function validateName(name: string, opts: ValidateOptions = {}): Pr
 
 async function _validate(name: string, opts: ValidateOptions): Promise<ValidationResult> {
   const parts = name.replace(/\([^)]*\)/g, '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return { status: 'invalid', reason: 'Need first and last name.' };
+  if (parts.length < 2) return { status: 'invalid', reason: 'need first and last name' };
 
   let summary = await fetchSummary(name);
   let canonical = name;
 
   if (!summary || summary.type === 'no-extract') {
     const hits = await searchWikipedia(name);
-    if (hits.length === 0) return { status: 'invalid', reason: 'No Wikipedia page found.' };
+    if (hits.length === 0) return { status: 'invalid', reason: 'no Wikipedia page found' };
     const best = hits
       .map((h) => ({ h, d: levenshtein(h.title.toLowerCase(), name.toLowerCase()) }))
       .sort((a, b) => a.d - b.d)[0]!;
-    if (best.d > 2) return { status: 'invalid', reason: 'Spelling too far from known public figure.' };
+    if (best.d > 2) return { status: 'invalid', reason: 'spelling too far from known figure' };
     summary = await fetchSummary(best.h.title);
     canonical = best.h.title;
-    if (!summary) return { status: 'invalid', reason: 'No Wikipedia page found.' };
+    if (!summary) return { status: 'invalid', reason: 'no Wikipedia page found' };
   }
 
   if (summary.type === 'disambiguation') {
-    return { status: 'invalid', reason: 'Disambiguation page — be more specific.' };
+    return { status: 'invalid', reason: 'be more specific' };
   }
 
   const qid = summary.wikibase_item;
-  if (!qid) return { status: 'invalid', reason: 'Entity is not a real person.' };
+  if (!qid) return { status: 'invalid', reason: 'not a real person' };
 
   const wd = await fetchWikidata(qid);
   const p31 = instanceClaims(wd);
   const isHuman = p31.includes('Q5');
   const isFictional = p31.some((q) => FICTIONAL_QIDS.has(q));
 
-  if (isFictional) return { status: 'invalid', reason: 'Fictional characters are not allowed.' };
-  if (!isHuman) return { status: 'invalid', reason: 'Entity is not a real person.' };
+  if (isFictional) return { status: 'invalid', reason: 'fictional characters not allowed' };
+  if (!isHuman) return { status: 'invalid', reason: 'not a real person' };
 
   // Initials check
   if (opts.expectedInitials) {
@@ -184,7 +184,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     if (actualInitials !== opts.expectedInitials.toUpperCase()) {
       return {
         status: 'invalid',
-        reason: `Initials do not match. Expected ${opts.expectedInitials.toUpperCase()}, got ${actualInitials}.`,
+        reason: `expected ${opts.expectedInitials.toUpperCase()}, got ${actualInitials}`,
       };
     }
   }
