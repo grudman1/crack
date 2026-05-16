@@ -12,6 +12,7 @@ const config: Config = {
         empty: 'hsl(var(--empty))',
         hairline: 'hsl(var(--hairline))',
         accent: 'hsl(var(--accent))',
+        success: 'hsl(var(--success))',
         error: 'hsl(var(--error))',
 
         // shadcn mappings

@@ -157,7 +157,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     const best = hits
       .map((h) => ({ h, d: levenshtein(h.title.toLowerCase(), name.toLowerCase()) }))
       .sort((a, b) => a.d - b.d)[0]!;
-    if (best.d > 2) return { status: 'invalid', reason: 'spelling too far from known figure' };
+    if (best.d > 2) return { status: 'invalid', reason: 'spelling too far' };
     summary = await fetchSummary(best.h.title);
     canonical = best.h.title;
     if (!summary) return { status: 'invalid', reason: 'no Wikipedia page found' };

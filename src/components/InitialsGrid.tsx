@@ -62,26 +62,34 @@ export function InitialsGrid({
               <span className="letter-pair">
                 {alpha} <span aria-hidden>·</span> {round}
               </span>
-              <div className="flex min-w-0 items-baseline gap-3">
-                <input
-                  ref={(el) => {
-                    refs.current[i] = el;
-                  }}
-                  className={cn(
-                    'input-line min-w-0 flex-1 text-base',
-                    invalid && 'text-muted line-through decoration-muted',
-                    unanswered && 'text-empty',
-                  )}
-                  value={row.name}
-                  onChange={(e) => onChange?.(i, e.target.value)}
-                  onKeyDown={(e) => handleKey(i, e)}
-                  disabled={readOnly}
-                  aria-label={`Answer for ${alpha}${round}`}
-                  spellCheck={false}
-                  autoComplete="off"
-                />
+              <div className="flex min-w-0 items-baseline gap-3 overflow-hidden">
+                {showResults ? (
+                  <span
+                    className={cn(
+                      'min-w-0 shrink-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-sans text-base text-ink',
+                      invalid && 'text-muted line-through decoration-muted',
+                      unanswered && 'text-empty',
+                    )}
+                  >
+                    {row.name || ' '}
+                  </span>
+                ) : (
+                  <input
+                    ref={(el) => {
+                      refs.current[i] = el;
+                    }}
+                    className="input-line min-w-0 flex-1 text-base"
+                    value={row.name}
+                    onChange={(e) => onChange?.(i, e.target.value)}
+                    onKeyDown={(e) => handleKey(i, e)}
+                    disabled={readOnly}
+                    aria-label={`Answer for ${alpha}${round}`}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                )}
                 {showResults && invalid && row.reason && (
-                  <span className="overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error">
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error">
                     {row.reason}
                   </span>
                 )}
@@ -90,7 +98,7 @@ export function InitialsGrid({
                 {showResults && valid && (row.points ?? 0) > 0 ? row.points ?? 0 : ''}
               </span>
               <span className="flex h-5 w-5 items-center justify-center" aria-hidden>
-                {showResults && valid && <Check className="h-4 w-4 text-accent" strokeWidth={2.25} />}
+                {showResults && valid && <Check className="h-4 w-4 text-success" strokeWidth={2.25} />}
                 {showResults && invalid && <X className="h-4 w-4 text-error" strokeWidth={2.25} />}
                 {showResults && unanswered && <span className="text-empty">—</span>}
               </span>

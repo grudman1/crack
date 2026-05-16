@@ -10,6 +10,7 @@
     --empty: 51 11% 75%;      /* #c4c2b8 */
     --hairline: 50 18% 89%;   /* #e8e6dc */
     --accent: 18 78% 57%;     /* #e8743b */
+    --success: 119 29% 53%;   /* #6aaa64 — NYT Wordle green */
     --error: 2 76% 43%;       /* #c11b17 */
   }
 
