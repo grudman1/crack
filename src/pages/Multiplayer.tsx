@@ -59,52 +59,49 @@ export default function Multiplayer() {
 
   return (
     <motion.div
-      className="mx-auto max-w-3xl px-6 py-10"
-      initial={{ opacity: 0, y: 8 }}
+      className="frame"
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <h1 className="font-display text-3xl uppercase text-center">Multiplayer</h1>
-      <p className="font-hand text-xl text-ink-soft text-center mt-1">play with everyone at the table</p>
+      <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink">Multiplayer</h1>
+      <p className="mt-1 text-center font-serif italic text-muted">Play with everyone at the table.</p>
 
       {!SUPABASE_CONFIGURED && (
-        <div className="paper-card p-4 mt-6 text-sm text-accent-red">
+        <div className="mt-6 border border-error/40 p-3 font-sans text-xs text-error">
           Supabase isn&apos;t configured. Set <code>VITE_SUPABASE_URL</code> and{' '}
-          <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env.local</code> and run the migration in{' '}
+          <code>VITE_SUPABASE_ANON_KEY</code>, then run the migration in{' '}
           <code>supabase/migrations/0001_initial_schema.sql</code>.
         </div>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-6 mt-8">
-        <div className="paper-card p-6">
-          <h2 className="font-display text-xl uppercase">Create a room</h2>
-          <p className="font-body text-sm text-ink-soft mt-1">You&apos;ll get a 6-letter code to share.</p>
-          <button
-            className="btn-paper btn-paper--primary mt-4 w-full"
-            onClick={handleCreate}
-            disabled={busy || loading}
-          >
-            Create room
-          </button>
-        </div>
-        <form className="paper-card p-6" onSubmit={handleJoin}>
-          <h2 className="font-display text-xl uppercase">Join a room</h2>
-          <label className="block mt-3">
-            <span className="font-hand text-lg text-ink-soft">code</span>
-            <input
-              className="ink-input border-b border-ink/40 mt-0.5 py-1 font-display text-xl tracking-widest"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              placeholder="A1B2C3"
-            />
-          </label>
-          <button className="btn-paper mt-4 w-full" disabled={busy || loading}>
-            Join
-          </button>
-        </form>
-      </div>
+      <section className="panel mt-8 p-5">
+        <h2 className="font-serif text-lg font-bold text-ink">Create a room</h2>
+        <p className="mt-1 font-sans text-sm text-muted">You&apos;ll get a 6-letter code to share.</p>
+        <button type="button" className="btn-primary mt-4 w-full" onClick={handleCreate} disabled={busy || loading}>
+          Create room
+        </button>
+      </section>
+
+      <form className="panel mt-4 p-5" onSubmit={handleJoin}>
+        <h2 className="font-serif text-lg font-bold text-ink">Join a room</h2>
+        <label className="mt-3 block">
+          <span className="font-sans text-xs uppercase tracking-wider text-muted">Code</span>
+          <input
+            className="input-line mt-1 font-serif text-2xl font-bold tracking-[0.25em]"
+            value={joinCode}
+            onChange={(e) =>
+              setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))
+            }
+            autoCapitalize="characters"
+            autoCorrect="off"
+            placeholder="A1B2C3"
+          />
+        </label>
+        <button type="submit" className="btn-ghost mt-4 w-full" disabled={busy || loading}>
+          Join
+        </button>
+      </form>
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </motion.div>
   );

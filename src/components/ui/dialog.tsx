@@ -13,10 +13,7 @@ export const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn(
-      'fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out',
-      className,
-    )}
+    className={cn('fixed inset-0 z-50 bg-ink/30 backdrop-blur-[1px]', className)}
     {...props}
   />
 ));
@@ -31,7 +28,7 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 paper-card p-6 shadow-xl',
+        'fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-frame -translate-x-1/2 -translate-y-1/2 border border-hairline bg-paper p-6',
         className,
       )}
       {...props}
@@ -39,9 +36,9 @@ export const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close
         aria-label="Close"
-        className="absolute right-3 top-3 rounded-sm text-ink-soft hover:text-ink"
+        className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center text-muted hover:text-ink"
       >
-        <X className="h-4 w-4" />
+        <X className="h-4 w-4" strokeWidth={1.75} />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
@@ -54,7 +51,7 @@ export const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('font-display text-xl uppercase tracking-wide', className)}
+    className={cn('font-serif text-xl font-bold text-ink', className)}
     {...props}
   />
 ));
@@ -66,7 +63,7 @@ export const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('mt-1 text-sm text-ink-soft', className)}
+    className={cn('mt-1 font-sans text-sm text-muted', className)}
     {...props}
   />
 ));

@@ -44,14 +44,10 @@ export default function Room() {
 
   const myGridRows: GridRow[] = useMemo(() => answers.map((name) => ({ name })), [answers]);
 
-  // Auto-join on enter
   useEffect(() => {
-    if (room && user) {
-      void joinRoom(room.id, user.id).catch(() => {});
-    }
+    if (room && user) void joinRoom(room.id, user.id).catch(() => {});
   }, [room, user]);
 
-  // Cleanup leave on unmount
   useEffect(() => {
     return () => {
       if (room && user) void leaveRoom(room.id, user.id).catch(() => {});
@@ -59,7 +55,6 @@ export default function Room() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Restore my submissions
   useEffect(() => {
     if (!user || !room || !submissions.length) return;
     const mine = submissions.filter((s) => s.player_id === user.id);
@@ -73,7 +68,6 @@ export default function Room() {
     });
   }, [submissions, user, room]);
 
-  // Timer when playing
   useEffect(() => {
     if (!room || room.phase !== 'playing') {
       if (tickRef.current) window.clearInterval(tickRef.current);
@@ -97,12 +91,11 @@ export default function Room() {
     };
   }, [room, isHost]);
 
-  // Reset start ref when phase moves
   useEffect(() => {
     if (room?.phase !== 'playing') playStartRef.current = null;
   }, [room?.phase]);
 
-  if (loading) return <Centered>loading room…</Centered>;
+  if (loading) return <Centered>Loading room…</Centered>;
   if (!room)
     return (
       <Centered>
@@ -126,9 +119,7 @@ export default function Room() {
     if (!room || !user) return;
     const letters = room.letters_26 ?? '';
     try {
-      const writes = answers
-        .map((name, i) => ({ name: name.trim(), i }))
-        .filter((x) => x.name);
+      const writes = answers.map((name, i) => ({ name: name.trim(), i })).filter((x) => x.name);
       for (const w of writes) {
         const initials = `${ALPHABET[w.i]}${letters[w.i] ?? ''}`;
         await upsertSubmission(room.id, user.id, w.i, initials, w.name);
@@ -143,10 +134,7 @@ export default function Room() {
     if (!isHost || !room) return;
     try {
       const r = generateRoundLetters();
-      await setRoomPhase(room.id, 'playing', {
-        sentence: r.sentence,
-        letters_26: r.letters,
-      });
+      await setRoomPhase(room.id, 'playing', { sentence: r.sentence, letters_26: r.letters });
     } catch (e) {
       toast.error(sanitizeError(e));
     }
@@ -194,39 +182,41 @@ export default function Room() {
   if (room.phase === 'lobby') {
     return (
       <motion.div
-        className="mx-auto max-w-2xl px-6 py-10"
-        initial={{ opacity: 0, y: 8 }}
+        className="frame"
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
       >
         <PhaseBanner phase="Lobby" />
-        <div className="paper-card p-6 mt-4">
+        <section className="panel mt-4 p-5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-hand text-xl text-ink-soft">room code</div>
-              <div className="font-display text-4xl tracking-widest">{room.code}</div>
+              <div className="font-sans text-xs uppercase tracking-wider text-muted">Room code</div>
+              <div className="mt-1 font-serif text-3xl font-bold tracking-[0.25em] tabular-nums text-ink">
+                {room.code}
+              </div>
             </div>
-            <button className="btn-paper inline-flex items-center gap-2" onClick={copyCode}>
-              <Copy className="h-4 w-4" /> copy
+            <button type="button" className="btn-ghost text-xs" onClick={copyCode}>
+              <Copy className="mr-1 h-3 w-3" strokeWidth={2.25} /> Copy
             </button>
           </div>
           <div className="mt-6">
-            <div className="font-hand text-xl text-ink-soft">players</div>
-            <ul className="mt-1 space-y-1">
+            <div className="font-sans text-xs uppercase tracking-wider text-muted">Players</div>
+            <ul className="mt-2 space-y-1 font-sans text-sm text-ink">
               {players.map((p) => (
-                <li key={p.id} className="font-body">
+                <li key={p.id}>
                   {p.profile?.display_name ?? 'Player'}
-                  {p.player_id === room.host_id && <span className="text-ink-soft"> (host)</span>}
+                  {p.player_id === room.host_id && <span className="text-muted"> · host</span>}
                 </li>
               ))}
-              {players.length === 0 && <li className="font-body text-ink-soft">waiting…</li>}
+              {players.length === 0 && <li className="text-muted">Waiting…</li>}
             </ul>
           </div>
           {isHost ? (
             <div className="mt-6 flex items-center gap-3">
-              <label className="font-hand text-lg text-ink-soft">timer</label>
+              <label className="font-sans text-xs uppercase tracking-wider text-muted">Timer</label>
               <select
-                className="ink-input border-b border-ink/40 py-1"
+                className="input-line w-auto py-1 font-sans text-sm"
                 value={room.timer_seconds}
                 onChange={async (e) => {
                   await setRoomPhase(room.id, 'lobby', { timer_seconds: Number(e.target.value) });
@@ -237,33 +227,31 @@ export default function Room() {
                 <option value={300}>5 min</option>
                 <option value={420}>7 min</option>
               </select>
-              <button
-                className="btn-paper btn-paper--primary"
-                onClick={handleStart}
-                disabled={players.length < 2}
-              >
-                Start game
+              <button type="button" className="btn-primary ml-auto" onClick={handleStart} disabled={players.length < 2}>
+                Start
               </button>
             </div>
           ) : (
-            <div className="mt-6 font-hand text-xl text-ink-soft">waiting for host to start…</div>
+            <div className="mt-6 font-sans text-sm text-muted">Waiting for host to start…</div>
           )}
-        </div>
+        </section>
       </motion.div>
     );
   }
 
   if (room.phase === 'playing') {
     return (
-      <div className="mx-auto max-w-2xl px-6 py-6">
-        <div className="flex items-center justify-between mb-3">
-          <PhaseBanner phase="Round in play" />
-          <button className="btn-paper text-sm" onClick={handleSaveProgress}>
+      <div className="frame">
+        <div className="flex items-baseline justify-between">
+          <PhaseBanner phase="Round" />
+          <button type="button" className="btn-ghost text-xs" onClick={handleSaveProgress}>
             Save progress
           </button>
         </div>
-        <TimerBar remaining={remaining} total={room.timer_seconds} />
-        <div className="mt-4">
+        <div className="mt-2">
+          <TimerBar remaining={remaining} total={room.timer_seconds} />
+        </div>
+        <div className="mt-6">
           <InitialsGrid letters={room.letters_26 ?? ''} rows={myGridRows} onChange={handleChangeAnswer} />
         </div>
       </div>
@@ -284,7 +272,6 @@ export default function Room() {
     );
   }
 
-  // results
   return (
     <ResultsView
       letters={room.letters_26 ?? ''}
@@ -326,7 +313,8 @@ function ValidatingView({
     return m;
   }, [submissions]);
 
-  const myVote = (submissionId: string) => votes.find((v) => v.submission_id === submissionId && v.voter_id === userId);
+  const myVote = (submissionId: string) =>
+    votes.find((v) => v.submission_id === submissionId && v.voter_id === userId);
   const tally = (submissionId: string) => {
     const yes = votes.filter((v) => v.submission_id === submissionId && v.is_valid).length;
     const no = votes.filter((v) => v.submission_id === submissionId && !v.is_valid).length;
@@ -334,62 +322,66 @@ function ValidatingView({
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-6">
-      <div className="flex items-center justify-between mb-3">
+    <div className="frame">
+      <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Validating" />
         {isHost && (
-          <button className="btn-paper btn-paper--primary" onClick={onCompute}>
+          <button type="button" className="btn-primary text-xs" onClick={onCompute}>
             Compute scores
           </button>
         )}
       </div>
-      <div className="paper-card divide-y divide-ink/15">
+      <ul className="mt-4 divide-y divide-hairline border-t border-hairline">
         {Array.from({ length: 26 }, (_, i) => i).map((i) => {
           const subs = byRow[i] ?? [];
           if (subs.length === 0) return null;
-          const initials = `${ALPHABET[i]}${letters[i] ?? ''}`;
+          const initials = `${ALPHABET[i]} · ${letters[i] ?? ''}`;
           return (
-            <div key={i} className="p-3">
-              <div className="font-display text-lg">{initials}</div>
-              <ul className="mt-1 space-y-1">
+            <li key={i} className="py-3">
+              <div className="letter-pair">{initials}</div>
+              <ul className="mt-2 space-y-1.5">
                 {subs.map((s) => {
                   const t = tally(s.id);
                   const mine = s.player_id === userId;
                   const v = myVote(s.id);
                   return (
-                    <li key={s.id} className="flex items-center gap-3">
-                      <span className="font-body flex-1">{s.name || <em className="text-ink-soft">(blank)</em>}</span>
-                      <span className="font-hand text-base text-ink-soft" aria-label="votes">
+                    <li key={s.id} className="flex items-center gap-2">
+                      <span className="flex-1 font-sans text-sm text-ink">
+                        {s.name || <em className="text-muted">(blank)</em>}
+                      </span>
+                      <span className="font-sans text-xs tabular-nums text-muted">
                         {t.yes} / {t.yes + t.no}
                       </span>
                       {!mine ? (
                         <>
                           <button
-                            className={cn('btn-paper px-2 py-1 text-sm', v?.is_valid && 'btn-paper--primary')}
+                            type="button"
+                            className={cn('btn-ghost px-2 py-1 text-xs', v?.is_valid && 'btn-ghost--selected')}
                             onClick={() => void onVote(s.id, true)}
                             aria-label="valid"
                           >
-                            <ThumbsUp className="h-3.5 w-3.5" />
+                            <ThumbsUp className="h-3.5 w-3.5" strokeWidth={2} />
                           </button>
                           <button
-                            className={cn('btn-paper px-2 py-1 text-sm', v && !v.is_valid && 'btn-paper--danger')}
+                            type="button"
+                            className={cn('btn-ghost px-2 py-1 text-xs', v && !v.is_valid && 'btn-ghost--danger')}
                             onClick={() => void onVote(s.id, false)}
                             aria-label="invalid"
                           >
-                            <ThumbsDown className="h-3.5 w-3.5" />
+                            <ThumbsDown className="h-3.5 w-3.5" strokeWidth={2} />
                           </button>
                         </>
                       ) : (
-                        <span className="font-hand text-sm text-ink-soft">yours</span>
+                        <span className="font-sans text-xs text-muted">yours</span>
                       )}
                     </li>
                   );
                 })}
               </ul>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
@@ -419,42 +411,42 @@ function ResultsView({
 
   return (
     <motion.div
-      className="mx-auto max-w-2xl px-6 py-8"
+      className="frame"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Results" />
         {isHost && (
-          <button className="btn-paper btn-paper--primary" onClick={onNewRound}>
+          <button type="button" className="btn-primary text-xs" onClick={onNewRound}>
             New round
           </button>
         )}
       </div>
-      <div className="paper-card p-4">
-        <h2 className="font-display text-xl uppercase">Leaderboard</h2>
+      <section className="panel mt-4 p-5">
+        <h2 className="font-serif text-lg font-bold text-ink">Leaderboard</h2>
         <ol className="mt-2 space-y-1">
           {sorted.map((s, idx) => {
             const player = players.find((p) => p.player_id === s.player_id);
             return (
-              <li key={s.id} className="flex items-baseline justify-between font-body">
+              <li key={s.id} className="flex items-baseline justify-between font-sans text-sm">
                 <span>
-                  <span className="font-hand text-xl text-ink-soft mr-2">{idx + 1}.</span>
+                  <span className="mr-2 text-muted tabular-nums">{idx + 1}.</span>
                   {player?.profile?.display_name ?? 'Player'}
                 </span>
-                <span className="font-hand text-2xl text-ink">{s.total}</span>
+                <span className="font-serif text-base font-bold tabular-nums text-ink">{s.total}</span>
               </li>
             );
           })}
-          {sorted.length === 0 && <li className="font-body text-ink-soft">no scores yet</li>}
+          {sorted.length === 0 && <li className="font-sans text-sm text-muted">No scores yet.</li>}
         </ol>
-      </div>
+      </section>
 
       {me && (
-        <details className="paper-card p-4 mt-4">
-          <summary className="cursor-pointer font-hand text-xl">your breakdown</summary>
-          <ul className="mt-2 text-sm font-body">
+        <details className="panel mt-4 p-5">
+          <summary className="cursor-pointer font-sans text-sm font-semibold text-ink">Your breakdown</summary>
+          <ul className="mt-3 space-y-1 font-sans text-sm">
             {Object.entries(me.breakdown ?? {})
               .sort(([a], [b]) => Number(a) - Number(b))
               .map(([row, pts]) => {
@@ -463,10 +455,12 @@ function ResultsView({
                 return (
                   <li key={row} className="flex justify-between">
                     <span>
-                      <span className="font-display mr-2">{ALPHABET[rowIdx]}{letters[rowIdx] ?? ''}</span>
+                      <span className="mr-2 font-serif font-bold">
+                        {ALPHABET[rowIdx]} · {letters[rowIdx] ?? ''}
+                      </span>
                       {sub?.name ?? '—'}
                     </span>
-                    <span className="font-hand text-base">{pts}</span>
+                    <span className="tabular-nums text-muted">{pts}</span>
                   </li>
                 );
               })}
@@ -477,7 +471,7 @@ function ResultsView({
       <div className="mt-6">
         <ExportButtons
           payload={{
-            title: 'CRACK Multiplayer · my results',
+            title: 'Crack Multiplayer · my results',
             sentence,
             letters,
             totalScore: me?.total,
@@ -500,5 +494,5 @@ function ResultsView({
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-md px-6 py-12 text-center font-hand text-2xl">{children}</div>;
+  return <div className="frame py-16 text-center font-sans text-sm text-muted">{children}</div>;
 }

@@ -7,12 +7,12 @@ interface ExportButtonsProps {
 
 export function ExportButtons({ payload }: ExportButtonsProps) {
   return (
-    <div className="flex gap-3">
-      <button className="btn-paper inline-flex items-center gap-2" onClick={() => exportCsv(payload)}>
-        <Download className="h-4 w-4" /> CSV
+    <div className="flex gap-2">
+      <button type="button" className="btn-ghost text-xs" onClick={() => exportCsv(payload)}>
+        <Download className="mr-1 h-3 w-3" strokeWidth={2} /> CSV
       </button>
-      <button className="btn-paper inline-flex items-center gap-2" onClick={() => exportTxt(payload)}>
-        <Download className="h-4 w-4" /> TXT
+      <button type="button" className="btn-ghost text-xs" onClick={() => exportTxt(payload)}>
+        <Download className="mr-1 h-3 w-3" strokeWidth={2} /> TXT
       </button>
     </div>
   );

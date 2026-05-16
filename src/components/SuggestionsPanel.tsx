@@ -11,22 +11,16 @@ interface SuggestionsPanelProps {
 export function SuggestionsPanel({ letters, missedIndexes }: SuggestionsPanelProps) {
   if (missedIndexes.length === 0) return null;
   return (
-    <div
-      className="my-6 p-4"
-      style={{
-        background: '#FFF8E1',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        transform: 'rotate(-0.5deg)',
-        border: '1px solid hsl(var(--ink) / 0.1)',
-      }}
-    >
+    <div className="mt-8">
       <Accordion type="single" collapsible>
         <AccordionItem value="suggestions">
-          <AccordionTrigger className="font-hand text-2xl">Need help? Famous folks you missed →</AccordionTrigger>
+          <AccordionTrigger className="font-serif text-base font-bold text-ink">
+            Famous folks you missed
+          </AccordionTrigger>
           <AccordionContent>
-            <ul className="space-y-3 mt-2">
+            <ul className="space-y-2">
               {missedIndexes.map((i) => (
-                <SuggestionRow key={i} initials={`${ALPHABET[i]}${letters[i] ?? ''}`} />
+                <SuggestionRow key={i} alpha={ALPHABET[i]!} round={letters[i] ?? ''} />
               ))}
             </ul>
           </AccordionContent>
@@ -36,9 +30,10 @@ export function SuggestionsPanel({ letters, missedIndexes }: SuggestionsPanelPro
   );
 }
 
-function SuggestionRow({ initials }: { initials: string }) {
+function SuggestionRow({ alpha, round }: { alpha: string; round: string }) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Suggestion[]>([]);
+  const initials = `${alpha}${round}`;
 
   useEffect(() => {
     let alive = true;
@@ -56,27 +51,36 @@ function SuggestionRow({ initials }: { initials: string }) {
   }, [initials]);
 
   return (
-    <li className="font-body text-sm text-ink">
-      <span className="font-display mr-2">{initials}</span>
-      {loading ? (
-        <span className="text-ink-soft">looking…</span>
-      ) : items.length === 0 ? (
-        <span className="text-ink-soft">no obvious suggestions</span>
-      ) : (
-        items.map((s, idx) => (
-          <span key={s.name}>
-            {idx > 0 && <span className="text-ink-soft"> · </span>}
-            {s.wikipediaUrl ? (
-              <a href={s.wikipediaUrl} target="_blank" rel="noreferrer" className="underline">
-                {s.name}
-              </a>
-            ) : (
-              <span>{s.name}</span>
-            )}
-            {s.description && <span className="text-ink-soft"> ({s.description})</span>}
-          </span>
-        ))
-      )}
+    <li className="grid items-baseline gap-3" style={{ gridTemplateColumns: '3.5rem 1fr' }}>
+      <span className="letter-pair">
+        {alpha} <span aria-hidden>·</span> {round}
+      </span>
+      <span className="font-sans text-sm text-ink">
+        {loading ? (
+          <span className="text-muted">looking…</span>
+        ) : items.length === 0 ? (
+          <span className="text-muted">no obvious suggestions</span>
+        ) : (
+          items.map((s, idx) => (
+            <span key={s.name}>
+              {idx > 0 && <span className="text-muted"> · </span>}
+              {s.wikipediaUrl ? (
+                <a
+                  href={s.wikipediaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline decoration-hairline underline-offset-4 hover:decoration-ink"
+                >
+                  {s.name}
+                </a>
+              ) : (
+                <span>{s.name}</span>
+              )}
+              {s.description && <span className="text-muted"> ({s.description})</span>}
+            </span>
+          ))
+        )}
+      </span>
     </li>
   );
 }

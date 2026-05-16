@@ -5,61 +5,40 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Editorial NYT-Games palette
         paper: 'hsl(var(--paper))',
-        'paper-shadow': 'hsl(var(--paper-shadow))',
         ink: 'hsl(var(--ink))',
-        'ink-soft': 'hsl(var(--ink-soft))',
-        'rule-blue': 'hsl(var(--rule-blue))',
-        'margin-red': 'hsl(var(--margin-red))',
-        'tile-wood': 'hsl(var(--tile-wood))',
-        'tile-wood-edge': 'hsl(var(--tile-wood-edge))',
-        'tile-ink': 'hsl(var(--tile-ink))',
-        'accent-green': 'hsl(var(--accent-green))',
-        'accent-red': 'hsl(var(--accent-red))',
-        'accent-gold': 'hsl(var(--accent-gold))',
+        muted: 'hsl(var(--muted))',
+        empty: 'hsl(var(--empty))',
+        hairline: 'hsl(var(--hairline))',
+        accent: 'hsl(var(--accent))',
+        error: 'hsl(var(--error))',
+
         // shadcn mappings
         background: 'hsl(var(--paper))',
         foreground: 'hsl(var(--ink))',
         primary: {
-          DEFAULT: 'hsl(var(--accent-green))',
+          DEFAULT: 'hsl(var(--ink))',
           foreground: 'hsl(var(--paper))',
         },
         destructive: {
-          DEFAULT: 'hsl(var(--accent-red))',
+          DEFAULT: 'hsl(var(--error))',
           foreground: 'hsl(var(--paper))',
         },
-        muted: {
-          DEFAULT: 'hsl(var(--paper-shadow))',
-          foreground: 'hsl(var(--ink-soft))',
-        },
         card: {
-          DEFAULT: 'hsl(var(--paper-shadow))',
+          DEFAULT: 'hsl(var(--paper))',
           foreground: 'hsl(var(--ink))',
         },
-        border: 'hsl(var(--ink) / 0.18)',
-        input: 'hsl(var(--ink) / 0.18)',
-        ring: 'hsl(var(--ink) / 0.5)',
+        border: 'hsl(var(--hairline))',
+        input: 'hsl(var(--hairline))',
+        ring: 'hsl(var(--accent))',
       },
       fontFamily: {
-        display: ['"Special Elite"', 'monospace'],
-        hand: ['Caveat', 'cursive'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
-        tile: ['"Roboto Slab"', 'serif'],
+        serif: ['Georgia', '"Times New Roman"', 'serif'],
+        sans: ['Helvetica', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
-      keyframes: {
-        'tile-drop': {
-          '0%': { transform: 'translateY(-20px) rotate(0deg)', opacity: '0' },
-          '100%': { transform: 'translateY(0) var(--final-rotate, rotate(0deg))', opacity: '1' },
-        },
-        shake: {
-          '0%, 100%': { transform: 'translateX(0)' },
-          '25%': { transform: 'translateX(-2px)' },
-          '75%': { transform: 'translateX(2px)' },
-        },
-      },
-      animation: {
-        'tile-drop': 'tile-drop 400ms ease-out both',
-        shake: 'shake 200ms ease-in-out infinite',
+      maxWidth: {
+        frame: '26.25rem', // 420px — the contained play frame
       },
     },
   },

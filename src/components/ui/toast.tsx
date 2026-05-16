@@ -5,11 +5,12 @@ export function Toaster() {
     <Sonner
       position="top-center"
       toastOptions={{
-        className: 'paper-card font-body text-ink',
+        className: 'font-sans text-sm',
         style: {
-          backgroundColor: 'hsl(var(--paper-shadow))',
+          backgroundColor: 'hsl(var(--paper))',
           color: 'hsl(var(--ink))',
-          border: '2px dashed hsl(var(--ink))',
+          border: '1px solid hsl(var(--hairline))',
+          borderRadius: '4px',
         },
       }}
     />

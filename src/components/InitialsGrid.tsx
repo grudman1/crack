@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ScrabbleTile } from './ScrabbleTile';
+import { Check, X } from 'lucide-react';
 import { ALPHABET } from '@/services/sentenceService';
 import { cn } from '@/lib/utils';
 
@@ -43,38 +43,35 @@ export function InitialsGrid({
   };
 
   return (
-    <div className={cn('paper-card overflow-hidden bg-paper', className)}>
-      <div className="sticky top-0 z-10 grid grid-cols-[44px_44px_1fr_auto] items-center gap-2 border-b border-ink/30 bg-paper-shadow px-4 py-2 font-hand text-base text-ink-soft">
-        <span>A–Z</span>
-        <span>round</span>
-        <span>person</span>
-        <span className="pr-2 text-right">{showResults ? 'pts' : ''}</span>
-      </div>
-      <div className="notebook-lines margin-line px-4">
+    <div className={cn('w-full', className)}>
+      <ul className="border-t border-hairline">
         {ALPHABET.map((alpha, i) => {
           const round = (letters[i] ?? ' ').toUpperCase();
           const row = rows[i] ?? { name: '' };
           const status = row.status;
-          const stateColor =
-            status === 'valid'
-              ? 'text-accent-green'
-              : status === 'invalid'
-                ? 'text-accent-red'
-                : 'text-ink';
+          const valid = status === 'valid';
+          const invalid = status === 'invalid';
+          const unanswered = status === 'unanswered';
+
           return (
-            <div
+            <li
               key={alpha}
-              className="grid grid-cols-[44px_44px_1fr_auto] items-center gap-2"
-              style={{ height: 32, paddingLeft: 56 - 16 - 4 /* shift past margin */ }}
+              className="grid items-center gap-3 border-b border-hairline px-1 py-2"
+              style={{ gridTemplateColumns: '3.5rem minmax(0, 1fr) auto 1.75rem' }}
             >
-              <ScrabbleTile letter={alpha} size="sm" />
-              <ScrabbleTile letter={round} size="sm" />
-              <div className="flex items-center gap-3 min-w-0">
+              <span className="letter-pair">
+                {alpha} <span aria-hidden>·</span> {round}
+              </span>
+              <div className="flex min-w-0 items-baseline gap-3">
                 <input
                   ref={(el) => {
                     refs.current[i] = el;
                   }}
-                  className={cn('ink-input font-hand text-xl py-0 flex-1 min-w-0', stateColor)}
+                  className={cn(
+                    'input-line min-w-0 flex-1 text-base',
+                    invalid && 'text-muted line-through decoration-muted',
+                    unanswered && 'text-empty',
+                  )}
                   value={row.name}
                   onChange={(e) => onChange?.(i, e.target.value)}
                   onKeyDown={(e) => handleKey(i, e)}
@@ -83,23 +80,24 @@ export function InitialsGrid({
                   spellCheck={false}
                   autoComplete="off"
                 />
-                {showResults && status === 'invalid' && row.reason && (
-                  <span className="font-body text-xs text-accent-red whitespace-nowrap overflow-hidden text-ellipsis">
+                {showResults && invalid && row.reason && (
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error">
                     {row.reason}
                   </span>
                 )}
               </div>
-              <div className="pr-2 text-right font-hand text-xl">
-                {showResults && status === 'valid' && (
-                  <span className="text-accent-green">✓ {row.points ?? 0}</span>
-                )}
-                {showResults && status === 'invalid' && <span className="text-accent-red">✗</span>}
-                {showResults && status === 'unanswered' && <span className="text-ink-soft">—</span>}
-              </div>
-            </div>
+              <span className="font-serif text-sm tabular-nums text-muted">
+                {showResults && valid && (row.points ?? 0) > 0 ? row.points ?? 0 : ''}
+              </span>
+              <span className="flex h-5 w-5 items-center justify-center" aria-hidden>
+                {showResults && valid && <Check className="h-4 w-4 text-accent" strokeWidth={2.25} />}
+                {showResults && invalid && <X className="h-4 w-4 text-error" strokeWidth={2.25} />}
+                {showResults && unanswered && <span className="text-empty">—</span>}
+              </span>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }

@@ -1,83 +1,69 @@
 import { motion } from 'framer-motion';
 
-function Heading({ children }: { children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mt-6">
-      <h2 className="font-display text-2xl text-ink uppercase">{children}</h2>
-      <svg viewBox="0 0 220 8" className="h-2 w-56 text-ink" aria-hidden="true">
-        <path
-          d="M 4 5 Q 30 1 60 4 T 120 4 T 216 4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-      </svg>
-    </div>
+    <section className="mt-8">
+      <h2 className="font-serif text-lg font-bold text-ink">{title}</h2>
+      <div className="mt-2 font-sans text-sm leading-relaxed text-ink">{children}</div>
+    </section>
   );
 }
 
 export default function HowToPlay() {
   return (
     <motion.div
-      className="mx-auto max-w-2xl px-6 py-8"
-      initial={{ opacity: 0, y: 8 }}
+      className="frame"
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <div className="paper-card p-6">
-        <h1 className="font-display text-3xl uppercase">How to play CRACK</h1>
-        <p className="font-body mt-2 text-ink-soft">
-          Pencil-and-paper roots, a referee from Wikipedia.
-        </p>
+      <h1 className="font-serif text-[28px] font-bold leading-tight text-ink">How to play</h1>
+      <p className="mt-1 font-serif italic text-muted">Pencil-and-paper roots, a referee from Wikipedia.</p>
 
-        <Heading>The grid</Heading>
-        <p className="font-body mt-2">
-          Each round generates 26 rows. Column A is the alphabet (A–Z). Column B is the first 26 letters of a
-          randomly-chosen English sentence (uppercased, with non-letters stripped out).
-        </p>
+      <Section title="The grid">
+        Each round generates 26 rows. Column A is the alphabet (A–Z). Column B is the first 26 letters of a randomly-chosen
+        English sentence — uppercased, with non-letters stripped out.
+      </Section>
 
-        <Heading>Your job</Heading>
-        <p className="font-body mt-2">
-          For every row, name a famous person whose initials match the pair. Example: row{' '}
-          <span className="font-display">AT</span> → Alan Turing. Row <span className="font-display">MC</span> →
-          Marie Curie. Stretching for connections is the whole game.
-        </p>
+      <Section title="Your job">
+        For every row, name a famous person whose initials match the pair. Example: row{' '}
+        <span className="font-serif font-bold">A · T</span> → Alan Turing. Row{' '}
+        <span className="font-serif font-bold">M · C</span> → Marie Curie.
+      </Section>
 
-        <Heading>What counts</Heading>
-        <ol className="font-body mt-2 list-decimal pl-6 space-y-1">
+      <Section title="What counts">
+        <ol className="list-decimal space-y-1 pl-5">
           <li>Must be a real person (we check Wikipedia + Wikidata).</li>
           <li>No fictional characters.</li>
           <li>Initials must match — first-name initial and last-name initial.</li>
           <li>Suffixes like Jr, Sr, II–IV don&apos;t count toward initials.</li>
           <li>Light misspellings forgive — Henry Caville → Henry Cavill is accepted.</li>
         </ol>
+      </Section>
 
-        <Heading>Solo scoring</Heading>
-        <p className="font-body mt-2">10 points for every validated, initials-matching person.</p>
+      <Section title="Solo scoring">10 points for every validated, initials-matching person.</Section>
 
-        <Heading>Multiplayer scoring</Heading>
-        <ul className="font-body mt-2 list-disc pl-6 space-y-1">
+      <Section title="Multiplayer scoring">
+        <ul className="list-disc space-y-1 pl-5">
           <li>10 points for a validated answer nobody else thought of.</li>
           <li>5 points for a validated answer somebody else also wrote.</li>
           <li>0 points if the table votes it down.</li>
         </ul>
+      </Section>
 
-        <Heading>Tips</Heading>
-        <ul className="font-body mt-2 list-disc pl-6 space-y-1">
+      <Section title="Tips">
+        <ul className="list-disc space-y-1 pl-5">
           <li>Stuck letters reward obscure musicians and Renaissance painters.</li>
           <li>Q and X are gold mines if you remember the right people.</li>
           <li>Argue politely.</li>
         </ul>
+      </Section>
 
-        <div className="paper-card mt-8 p-4">
-          <p className="font-body text-xs text-ink-soft">
-            Famous-people suggestions are sourced from Wikidata (CC0) and Wikipedia (CC BY-SA). Names
-            and descriptions are excerpted; click any suggestion to read the full article on Wikipedia.
-          </p>
-        </div>
-      </div>
+      <p className="mt-10 border-t border-hairline pt-4 font-sans text-xs text-muted">
+        Famous-people suggestions are sourced from Wikidata (CC0) and Wikipedia (CC BY-SA). Names and descriptions are
+        excerpted; click any suggestion to read the full article on Wikipedia.
+      </p>
     </motion.div>
   );
 }

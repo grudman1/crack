@@ -4,18 +4,13 @@
 
 @layer base {
   :root {
-    --paper: 40 50% 90%;
-    --paper-shadow: 40 35% 83%;
-    --ink: 30 15% 15%;
-    --ink-soft: 35 12% 32%;
-    --rule-blue: 210 45% 77%;
-    --margin-red: 0 50% 57%;
-    --tile-wood: 35 50% 81%;
-    --tile-wood-edge: 35 35% 56%;
-    --tile-ink: 25 45% 17%;
-    --accent-green: 135 25% 39%;
-    --accent-red: 0 50% 47%;
-    --accent-gold: 48 67% 47%;
+    --paper: 47 75% 98%;        /* #fffdf7 warm white */
+    --ink: 0 0% 7%;           /* #121212 */
+    --muted: 0 0% 43%;        /* #6e6e6e */
+    --empty: 51 11% 75%;      /* #c4c2b8 */
+    --hairline: 50 18% 89%;   /* #e8e6dc */
+    --accent: 18 78% 57%;     /* #e8743b */
+    --error: 2 76% 43%;       /* #c11b17 */
   }
 
   html,
@@ -25,9 +20,8 @@
   }
 
   body {
-    @apply font-body text-ink;
+    @apply font-sans text-ink antialiased;
     background-color: hsl(var(--paper));
-    -webkit-font-smoothing: antialiased;
   }
 
   button {
@@ -35,108 +29,96 @@
   }
 
   input,
-  textarea {
+  textarea,
+  select {
     font-family: inherit;
     color: inherit;
   }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--empty));
+  }
 }
 
-@layer utilities {
-  .paper-bg {
-    background-color: hsl(var(--paper));
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.15 0 0 0 0 0.1 0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>");
-    background-size: 240px 240px;
+@layer components {
+  /* Frame: contained ~420px column */
+  .frame {
+    width: 100%;
+    max-width: 26.25rem; /* 420px */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
-  .notebook-lines {
-    background-image: repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent 31px,
-      hsl(var(--rule-blue)) 31px,
-      hsl(var(--rule-blue)) 32px
-    );
-  }
-
-  .margin-line {
-    position: relative;
-  }
-
-  .margin-line::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 56px;
-    width: 1px;
-    background-color: hsl(var(--margin-red));
-    pointer-events: none;
-  }
-
-  @media (max-width: 640px) {
-    .margin-line::before {
-      left: 40px;
-    }
-  }
-
-  .paper-card {
-    background-color: hsl(var(--paper-shadow));
-    border: 2px dashed hsl(var(--ink));
-    border-radius: 6px;
-    box-shadow: 0 2px 0 hsl(var(--tile-wood-edge) / 0.5), 0 6px 14px hsl(var(--ink) / 0.08);
-  }
-
-  .btn-paper {
-    @apply font-display uppercase tracking-wide text-ink px-5 py-2.5 transition-transform;
-    background-color: hsl(var(--paper-shadow));
-    border: 2px dashed hsl(var(--ink));
-    border-radius: 6px;
+  /* Solid black primary CTA */
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-serif font-bold text-paper;
+    background-color: hsl(var(--ink));
+    border: none;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    letter-spacing: 0.01em;
     cursor: pointer;
+    transition: opacity 150ms ease-out;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Ghost / pill button (used for duration selectors, secondary actions) */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center font-sans text-ink;
+    background-color: transparent;
+    border: 1px solid hsl(var(--hairline));
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out;
+  }
+  .btn-ghost:hover {
+    background-color: hsl(var(--hairline) / 0.4);
+  }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost--selected {
+    border-color: hsl(var(--accent));
+    color: hsl(var(--accent));
+    background-color: hsl(var(--accent) / 0.08);
+  }
+  .btn-ghost--danger {
+    border-color: hsl(var(--error) / 0.5);
+    color: hsl(var(--error));
   }
 
-  .btn-paper:hover {
-    transform: translateY(1px);
+  /* Bordered card (used in lobby, results blocks) */
+  .panel {
+    background-color: hsl(var(--paper));
+    border: 1px solid hsl(var(--hairline));
+    border-radius: 4px;
   }
 
-  .btn-paper:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .btn-paper--primary {
-    border-color: hsl(var(--accent-green));
-    color: hsl(var(--accent-green));
-  }
-
-  .btn-paper--danger {
-    border-color: hsl(var(--accent-red));
-    color: hsl(var(--accent-red));
-  }
-
-  .ink-input {
+  /* Bottom-rule input (used in setup and gameplay) */
+  .input-line {
+    @apply font-sans text-ink;
     background: transparent;
     border: none;
+    border-bottom: 1px solid hsl(var(--hairline));
     outline: none;
     width: 100%;
-    color: hsl(var(--ink));
+    padding: 0.5rem 0;
+    transition: border-color 150ms ease-out;
+  }
+  .input-line:focus {
+    border-bottom-color: hsl(var(--accent));
+  }
+  .input-line:disabled {
+    color: hsl(var(--muted));
   }
 
-  .ink-input::placeholder {
-    color: hsl(var(--ink-soft));
-    opacity: 0.55;
-  }
-
-  .stamp {
-    display: inline-block;
-    font-family: 'Special Elite', monospace;
-    text-transform: uppercase;
-    color: hsl(var(--accent-red));
-    border: 3px solid hsl(var(--accent-red));
-    padding: 0.25rem 0.9rem;
-    border-radius: 6px;
-    transform: rotate(-2deg);
-    letter-spacing: 0.08em;
-    box-shadow: inset 0 0 0 1px hsl(var(--accent-red) / 0.35);
+  /* Letter pair: "A · X" rendering */
+  .letter-pair {
+    @apply font-serif font-bold text-ink;
+    font-size: 1.0625rem; /* 17px */
+    letter-spacing: 0.06em;
   }
 }

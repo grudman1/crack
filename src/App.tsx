@@ -7,7 +7,6 @@ import Multiplayer from '@/pages/Multiplayer';
 import Room from '@/pages/Room';
 import HowToPlay from '@/pages/HowToPlay';
 import NotFound from '@/pages/NotFound';
-import DevTiles from '@/pages/DevTiles';
 
 function App() {
   return (
@@ -19,7 +18,6 @@ function App() {
           <Route path="/mp" element={<Multiplayer />} />
           <Route path="/mp/:roomCode" element={<Room />} />
           <Route path="/how" element={<HowToPlay />} />
-          <Route path="/dev/tiles" element={<DevTiles />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
 import { ALPHABET, generateRoundLetters } from '@/services/sentenceService';
 import { validateName, computeNameInitials } from '@/services/wikiValidationService';
 import { playBeep, playChime, resumeAudio } from '@/services/audioService';
@@ -8,7 +9,6 @@ import { TimerBar } from '@/components/TimerBar';
 import { PhaseBanner } from '@/components/PhaseBanner';
 import { SuggestionsPanel } from '@/components/SuggestionsPanel';
 import { ExportButtons } from '@/components/ExportButtons';
-import { Progress } from '@/components/ui/progress';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { toast } from '@/components/ui/toast';
 
@@ -42,7 +42,6 @@ export default function Solo() {
   const [validationProgress, setValidationProgress] = useState(0);
   const tickRef = useRef<number | null>(null);
 
-  // Timer
   useEffect(() => {
     if (phase !== 'playing') return;
     tickRef.current = window.setInterval(() => {
@@ -105,7 +104,6 @@ export default function Solo() {
     setPhase('results');
   }, [round, rows]);
 
-  // Round-over transition
   useEffect(() => {
     if (phase === 'playing' && remaining === 0) {
       playChime();
@@ -138,60 +136,72 @@ export default function Solo() {
   );
 
   const totalScore = useMemo(() => rows.reduce((acc, r) => acc + (r.points ?? 0), 0), [rows]);
+  const correctCount = useMemo(() => rows.filter((r) => r.status === 'valid').length, [rows]);
   const missedIndexes = useMemo(
     () => rows.map((r, i) => (r.status === 'invalid' || r.status === 'unanswered' ? i : -1)).filter((i) => i >= 0),
     [rows],
   );
 
+  // ---- Setup ----
   if (phase === 'setup') {
     return (
       <motion.div
-        className="mx-auto max-w-md px-6 py-12"
-        initial={{ opacity: 0, y: 8 }}
+        className="frame"
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
       >
-        <div className="paper-card p-6 text-center">
-          <h1 className="font-display text-3xl uppercase">Solo</h1>
-          <p className="font-hand text-xl text-ink-soft mt-1">choose a round length</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-3">
-            {TIMER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                className={`btn-paper ${totalSeconds === opt.value ? 'btn-paper--primary' : ''}`}
-                onClick={() => setTotalSeconds(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <label className="block mt-4 font-hand text-lg text-ink-soft">
-            or custom (seconds)
-            <input
-              type="number"
-              min={30}
-              max={1800}
-              value={totalSeconds}
-              onChange={(e) => setTotalSeconds(Math.max(30, Math.min(1800, Number(e.target.value) || 30)))}
-              className="ink-input border-b border-ink/40 ml-2 w-20 text-center"
-            />
-          </label>
-          <button className="btn-paper btn-paper--primary mt-6 text-lg" onClick={start}>
-            Start round
+        <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink">Solo</h1>
+        <p className="mt-1 text-center font-serif italic text-muted">Choose a round length.</p>
+
+        <div className="mt-8 flex justify-center gap-2">
+          {TIMER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              className={`btn-ghost w-20 ${totalSeconds === opt.value ? 'btn-ghost--selected' : ''}`}
+              onClick={() => setTotalSeconds(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-6 flex items-baseline justify-center gap-2 font-sans text-sm text-muted">
+          <span>or custom</span>
+          <input
+            type="number"
+            min={30}
+            max={1800}
+            value={totalSeconds}
+            onChange={(e) => setTotalSeconds(Math.max(30, Math.min(1800, Number(e.target.value) || 30)))}
+            className="input-line w-16 text-center text-ink"
+          />
+          <span>sec</span>
+        </div>
+
+        <div className="mt-10 flex justify-center">
+          <button type="button" className="btn-primary" onClick={start}>
+            Start round <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.25} />
           </button>
         </div>
       </motion.div>
     );
   }
 
+  // ---- Validating ----
   if (phase === 'validating') {
+    const checked = Math.min(26, Math.round(validationProgress / (100 / 26)));
     return (
-      <div className="mx-auto max-w-2xl px-6 py-8">
-        <PhaseBanner phase="Validating" className="mb-4" />
-        <p className="font-hand text-xl text-ink-soft">
-          Checking {Math.min(26, Math.round(validationProgress / (100 / 26)))} of 26…
-        </p>
-        <Progress value={validationProgress} className="mt-2" />
+      <div className="frame">
+        <PhaseBanner phase="Validating" />
+        <div className="mt-2 flex items-baseline justify-between font-serif">
+          <span className="text-lg font-bold tabular-nums">{checked} / 26</span>
+          <span className="font-sans text-xs text-muted">Checking Wikipedia…</span>
+        </div>
+        <div className="mt-2 h-[3px] w-full bg-hairline">
+          <div className="h-full bg-accent transition-[width] duration-200 ease-linear" style={{ width: `${validationProgress}%` }} />
+        </div>
         <div className="mt-6">
           <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly />
         </div>
@@ -199,26 +209,38 @@ export default function Solo() {
     );
   }
 
+  // ---- Results ----
   if (phase === 'results') {
     return (
       <motion.div
-        className="mx-auto max-w-2xl px-6 py-8"
+        className="frame"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.2 }}
       >
-        <div className="flex items-center justify-between mb-4">
-          <PhaseBanner phase="Results" />
-          <div className="stamp" style={{ color: 'hsl(var(--accent-green))', borderColor: 'hsl(var(--accent-green))' }}>
-            {totalScore} pts
+        <div className="flex items-baseline justify-between">
+          <div>
+            <PhaseBanner phase="Results" />
+            <div className="mt-1 flex items-baseline gap-3 font-serif">
+              <span className="text-lg font-bold tabular-nums">{correctCount} / 26</span>
+            </div>
           </div>
+          <div className="font-serif text-lg font-bold text-ink tabular-nums">{totalScore} pts</div>
         </div>
-        <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly showResults />
+        <div className="mt-2 h-[3px] w-full bg-hairline">
+          <div className="h-full bg-accent" style={{ width: `${(correctCount / 26) * 100}%` }} />
+        </div>
+
+        <div className="mt-6">
+          <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly showResults />
+        </div>
+
         <SuggestionsPanel letters={round?.letters ?? ''} missedIndexes={missedIndexes} />
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
           <ExportButtons
             payload={{
-              title: `CRACK Solo · ${new Date().toLocaleDateString()}`,
+              title: `Crack Solo · ${new Date().toLocaleDateString()}`,
               sentence: round?.sentence ?? '',
               letters: round?.letters ?? '',
               totalScore,
@@ -233,7 +255,7 @@ export default function Solo() {
               })),
             }}
           />
-          <button className="btn-paper btn-paper--primary" onClick={() => setPhase('setup')}>
+          <button type="button" className="btn-primary" onClick={() => setPhase('setup')}>
             New round
           </button>
         </div>
@@ -241,22 +263,23 @@ export default function Solo() {
     );
   }
 
-  // Playing
+  // ---- Playing ----
   return (
-    <div className="mx-auto max-w-2xl px-6 py-6">
-      <div className="flex items-center justify-between mb-3">
-        <PhaseBanner phase="Round in play" />
+    <div className="frame">
+      <div className="flex items-baseline justify-between">
+        <PhaseBanner phase="Round" />
         <button
-          className="btn-paper btn-paper--danger text-sm"
-          onClick={() => {
-            setRemaining(0);
-          }}
+          type="button"
+          className="btn-ghost btn-ghost--danger text-xs"
+          onClick={() => setRemaining(0)}
         >
           End now
         </button>
       </div>
-      <TimerBar remaining={remaining} total={totalSeconds} />
-      <div className="mt-4">
+      <div className="mt-2">
+        <TimerBar remaining={remaining} total={totalSeconds} />
+      </div>
+      <div className="mt-6">
         <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} onChange={handleChange} />
       </div>
     </div>
