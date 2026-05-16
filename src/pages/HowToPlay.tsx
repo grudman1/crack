@@ -70,6 +70,13 @@ export default function HowToPlay() {
           <li>Q and X are gold mines if you remember the right people.</li>
           <li>Argue politely.</li>
         </ul>
+
+        <div className="paper-card mt-8 p-4">
+          <p className="font-body text-xs text-ink-soft">
+            Famous-people suggestions are sourced from Wikidata (CC0) and Wikipedia (CC BY-SA). Names
+            and descriptions are excerpted; click any suggestion to read the full article on Wikipedia.
+          </p>
+        </div>
       </div>
     </motion.div>
   );
