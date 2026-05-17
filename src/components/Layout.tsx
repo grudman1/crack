@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { HelpCircle, Menu, X } from 'lucide-react';
 import { AuthModal } from './AuthModal';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
 
@@ -102,7 +103,9 @@ export function Layout() {
         </header>
       )}
       <main className="viewport-center flex-1 py-6 lg:py-10">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
       <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </div>

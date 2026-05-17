@@ -1,48 +1,25 @@
-import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '@/services/supabase';
+import { useCallback } from 'react';
+import { useRealtimeTable } from '@/hooks/useRealtime';
 import { listReviews } from '@/services/reviewService';
 import type { ReviewStatus, ValidationReviewRow } from '@/types/database';
 
 interface UseReviewsResult {
   reviews: ValidationReviewRow[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: () => void;
 }
 
 /** Subscribes to validation_reviews and re-loads the (optionally
- *  status-filtered) list whenever the table changes. Mirrors
- *  useSubmissions — fetch on mount + realtime channel that re-runs the
- *  query on any event. */
+ *  status-filtered) list whenever the table changes. Wraps
+ *  useRealtimeTable with a custom loadFn so RLS-aware filtering stays
+ *  in reviewService. Subscribes to ALL changes on the table — admins
+ *  want to see new submissions land regardless of which tab is open. */
 export function useReviews(status?: ReviewStatus): UseReviewsResult {
-  const [reviews, setReviews] = useState<ValidationReviewRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    try {
-      const rows = await listReviews(status);
-      setReviews(rows);
-    } finally {
-      setLoading(false);
-    }
-  }, [status]);
-
-  useEffect(() => {
-    setLoading(true);
-    void load();
-    const channel = supabase
-      .channel(`reviews:${status ?? 'all'}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'validation_reviews' },
-        () => {
-          void load();
-        },
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [status, load]);
-
-  return { reviews, loading, refresh: load };
+  const loadFn = useCallback(() => listReviews(status), [status]);
+  const { rows, loading, refresh } = useRealtimeTable<ValidationReviewRow>({
+    table: 'validation_reviews',
+    channelKey: `reviews:${status ?? 'all'}`,
+    loadFn,
+  });
+  return { reviews: rows, loading, refresh };
 }
