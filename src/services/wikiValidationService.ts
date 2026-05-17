@@ -174,6 +174,26 @@ function isPrefixWithConnector(typed: string, candidate: string): boolean {
   return CONNECTOR_WORDS.has(rest);
 }
 
+// Per-word length-ratio gate. Each typed token's length must be at least
+// 70% of the candidate's same-position token. This blocks stub matches
+// like "Teddy Ro" → "Teddy Robin" (surname ratio 2/5 = 40%) while
+// allowing typos of comparable length ("Roosvelt" → "Roosevelt" = 89%).
+const LENGTH_RATIO_THRESHOLD = 0.7;
+
+function wordLengthRatioOK(typed: string, candidate: string): boolean {
+  const t = nameTokens(typed).map((s) => normalizeForCompare(s)).filter(Boolean);
+  const c = nameTokens(candidate).map((s) => normalizeForCompare(s)).filter(Boolean);
+  if (t.length === 0 || c.length === 0) return false;
+  const n = Math.min(t.length, c.length);
+  for (let i = 0; i < n; i++) {
+    const tl = t[i]!.length;
+    const cl = c[i]!.length;
+    if (cl === 0) return false;
+    if (tl / cl < LENGTH_RATIO_THRESHOLD) return false;
+  }
+  return true;
+}
+
 // --- wikipedia / wikidata fetchers + caches -------------------------------
 
 interface WikiSummary {
@@ -305,11 +325,15 @@ async function isPerson(summary: WikiSummary | null): Promise<boolean> {
       return wd.human;
     }
   }
-  // Fallback heuristic when Wikidata is unavailable.
+  // Fallback heuristics for when Wikidata is unavailable or missing P31.
   const extract = summary.extract ?? '';
   if (/\(born\s+\d{1,2}\s+\w+|\(born\s+\d{3,4}\)/i.test(extract)) return true;
   if (/\bborn\b\s+\d{1,2}\s+\w+\s+\d{3,4}/i.test(extract)) return true;
   if (/\(\d{3,4}\s*[–\-—]\s*(?:\d{3,4}|present)\)/i.test(extract)) return true;
+  // Wikipedia biography opener: "<Name> (…) was/is/were a/an/the <profession>"
+  // The first sentence of a biographical article almost always uses this form.
+  const firstSentence = extract.split(/\.\s/, 1)[0] ?? '';
+  if (/\b(?:is|was|were)\s+(?:an?|the)\s+[A-Z]?[a-z]/i.test(firstSentence)) return true;
   return false;
 }
 
@@ -337,30 +361,44 @@ export async function validateName(name: string, opts: ValidateOptions = {}): Pr
 }
 
 async function _validate(name: string, opts: ValidateOptions): Promise<ValidationResult> {
-  // Hard gate: at least two name tokens.
   const tokens = nameTokens(name);
-  if (tokens.length < 2) return { status: 'invalid', reason: 'need first and last name' };
+  const expected = opts.expectedInitials?.toUpperCase();
+
+  // Single-token input: try Wikipedia redirect to a real person (JFK,
+  // FDR, MLK …). Only attempt when the typed string is plausibly an
+  // abbreviation (≥ 3 chars). "LT" falls straight through to the
+  // standard "need first and last name" rejection.
+  if (tokens.length < 2) {
+    if (name.length >= 3 && expected) {
+      const exact = await getSummary(name);
+      if (
+        exact &&
+        exact.type === 'standard' &&
+        exact.title.toLowerCase() !== name.toLowerCase() &&
+        computeNameInitials(exact.title) === expected &&
+        (await isPerson(exact))
+      ) {
+        return asValid(exact);
+      }
+    }
+    return { status: 'invalid', reason: 'need first and last name' };
+  }
 
   // Hard gate: typed initials must match the round's pair.
   const typedInitials = computeNameInitials(name);
-  const expected = opts.expectedInitials?.toUpperCase();
   if (expected && typedInitials && typedInitials !== expected) {
     return { status: 'invalid', reason: `expected ${expected}, got ${typedInitials}` };
   }
   const targetInitials = expected ?? typedInitials;
   if (!targetInitials) return { status: 'invalid', reason: 'need first and last name' };
 
-  // Track whether we encountered a real Wikipedia article that turned out
-  // not to be a person (band, place, fictional character, concept). Used
-  // to emit a more specific rejection message at the end.
-  let sawNonPerson = false;
-
-  // (a) Local fast-path.
+  // (a) Local fast-path. Strict full-name fuzzy on the entry name AND
+  // word-length-ratio gate so a typed stub can't ride a phonetic match.
   const localList = FAMOUS_PEOPLE[targetInitials] ?? [];
   for (const entry of localList) {
-    if (localEntryMatches(name, entry.name)) {
-      return { status: 'valid', canonicalName: entry.name, wikipediaUrl: entry.wikipediaUrl };
-    }
+    if (!localEntryMatches(name, entry.name)) continue;
+    if (!wordLengthRatioOK(name, entry.name)) continue;
+    return { status: 'valid', canonicalName: entry.name, wikipediaUrl: entry.wikipediaUrl };
   }
 
   // (b) Wikipedia exact-title.
@@ -369,57 +407,51 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
   if (exact) {
     if (exact.type === 'disambiguation') {
       exactWasDisambig = true;
-    } else if (computeNameInitials(exact.title) === targetInitials) {
-      if (await isPerson(exact)) return asValid(exact);
-      sawNonPerson = true;
+    } else if (
+      computeNameInitials(exact.title) === targetInitials &&
+      wordLengthRatioOK(name, exact.title) &&
+      (await isPerson(exact))
+    ) {
+      return asValid(exact);
     }
   }
 
   const hits = await getOpenSearch(name);
 
   // (c) Prefix-with-connector — "Queen Noor" → "Queen Noor of Jordan".
-  // Runs before the general opensearch loop so a connector-suffixed canonical
-  // title wins over a same-initials person whose name just happens to begin
-  // the same way.
+  // Prefix-match already implies word-length 1.0 in the typed positions,
+  // but the ratio check is cheap and guards against future regressions.
   for (const hitTitle of hits.slice(0, 3)) {
     if (!isPrefixWithConnector(name, hitTitle)) continue;
+    if (!wordLengthRatioOK(name, hitTitle)) continue;
     const sum = await getSummary(hitTitle);
     if (!sum || sum.type === 'disambiguation') continue;
     if (await isPerson(sum)) return asValid(sum);
-    sawNonPerson = true;
   }
 
-  // (d) Disambig wikitext — if exact returned a disambiguation page, walk
-  // its bulleted list (Wikipedia's curated prominence order) and accept the
-  // first person whose initials match. This is what surfaces
-  // "Chris Evans (actor)" instead of opensearch's "(presenter)".
+  // (d) Disambig wikitext — Wikipedia's curated prominence order.
   if (exactWasDisambig && exact) {
     const links = await getDisambigLinks(exact.title);
     let evaluated = 0;
     for (const linkTitle of links) {
       if (evaluated >= 25) break;
       if (computeNameInitials(linkTitle) !== targetInitials) continue;
+      if (!wordLengthRatioOK(name, linkTitle)) continue;
       const sum = await getSummary(linkTitle);
       if (!sum || sum.type === 'disambiguation') continue;
       evaluated += 1;
       if (await isPerson(sum)) return asValid(sum);
-      sawNonPerson = true;
     }
   }
 
-  // (e) Opensearch — typo-tolerant suggestions ranked by Wikipedia. Catches
-  // misspellings ("Harry Reasner" → "Harry Reasoner") and other cases the
-  // earlier steps didn't reach.
+  // (e) Opensearch — typo-tolerant suggestions ranked by Wikipedia.
   for (const hitTitle of hits.slice(0, 8)) {
     if (computeNameInitials(hitTitle) !== targetInitials) continue;
+    if (!wordLengthRatioOK(name, hitTitle)) continue;
     const sum = await getSummary(hitTitle);
     if (!sum || sum.type === 'disambiguation') continue;
     if (await isPerson(sum)) return asValid(sum);
-    sawNonPerson = true;
   }
 
-  // (f) Reject. Distinguish "we found something but it isn't a real person"
-  // (band, place, fictional character) from "we couldn't find anything".
-  if (sawNonPerson) return { status: 'invalid', reason: 'not a real person' };
   return { status: 'invalid', reason: "couldn't verify" };
 }
