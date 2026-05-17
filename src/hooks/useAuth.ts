@@ -11,6 +11,7 @@ interface AuthState {
 export function useAuth(): AuthState & {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  signInAnonymously: (displayName: string) => Promise<User>;
   signOut: () => Promise<void>;
 } {
   const [state, setState] = useState<AuthState>({ user: null, session: null, loading: true });
@@ -44,9 +45,23 @@ export function useAuth(): AuthState & {
     if (error) throw error;
   };
 
+  // Anonymous Supabase auth. The display_name lands in
+  // raw_user_meta_data, which the handle_new_user trigger reads when it
+  // creates the profile row — so we don't need any extra plumbing here
+  // beyond the call itself. Requires the Anonymous Sign-Ins toggle to
+  // be ON in Supabase → Authentication → Providers.
+  const signInAnonymously = async (displayName: string): Promise<User> => {
+    const { data, error } = await supabase.auth.signInAnonymously({
+      options: { data: { display_name: displayName.trim() || 'Player' } },
+    });
+    if (error) throw error;
+    if (!data.user) throw new Error('Anonymous sign-in returned no user.');
+    return data.user;
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
-  return { ...state, signIn, signUp, signOut };
+  return { ...state, signIn, signUp, signInAnonymously, signOut };
 }

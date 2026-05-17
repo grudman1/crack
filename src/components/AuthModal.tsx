@@ -39,8 +39,12 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogTitle>{mode === 'signin' ? 'Sign in' : 'Sign up'}</DialogTitle>
-        <DialogDescription>Save scores. Play with friends.</DialogDescription>
+        <DialogTitle>{mode === 'signin' ? 'Sign in' : 'Save your progress'}</DialogTitle>
+        <DialogDescription>
+          {mode === 'signin'
+            ? 'Welcome back.'
+            : 'Sign up to keep your scores across devices. Optional — you can keep playing without an account.'}
+        </DialogDescription>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === 'signup' && (
             <label className="block">

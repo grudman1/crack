@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 export default function Room() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { user } = useAuth();
+  const { user, signInAnonymously } = useAuth();
   const { room, loading } = useRoom(roomCode);
   const players = useRoomPlayers(room?.id);
   const submissions = useSubmissions(room?.id);
@@ -40,6 +40,13 @@ export default function Room() {
   const [remaining, setRemaining] = useState(0);
   const playStartRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
+  // Anonymous join flow (deep link in incognito, etc.)
+  const [joinName, setJoinName] = useState('');
+  const [joiningRoom, setJoiningRoom] = useState(false);
+  // Guard against the joinRoom useEffect firing twice when both the
+  // room and user become available in quick succession (e.g. just
+  // after an anonymous sign-in).
+  const joinedRef = useRef<string | null>(null);
 
   const isHost = !!user && !!room && room.host_id === user.id;
 
@@ -72,7 +79,11 @@ export default function Room() {
   }, [room]);
 
   useEffect(() => {
-    if (room && user) void joinRoom(room.id, user.id).catch(() => {});
+    if (!room || !user) return;
+    const key = `${room.id}|${user.id}`;
+    if (joinedRef.current === key) return;
+    joinedRef.current = key;
+    void joinRoom(room.id, user.id).catch(() => {});
   }, [room, user]);
 
   useEffect(() => {
@@ -132,15 +143,60 @@ export default function Room() {
         </Link>
       </Centered>
     );
-  if (!user)
+  if (!user) {
+    const handleAnonymousJoin = async () => {
+      const trimmed = joinName.trim();
+      if (!trimmed) return;
+      setJoiningRoom(true);
+      try {
+        // signInAnonymously creates the auth user + the profile row
+        // (via the handle_new_user trigger). The joinRoom call wired
+        // to (room, user) further up fires automatically once
+        // onAuthStateChange surfaces the new user.
+        await signInAnonymously(trimmed);
+        try {
+          localStorage.setItem('crack:last_display_name', trimmed);
+        } catch {
+          /* swallow */
+        }
+      } catch (e) {
+        toast.error(sanitizeError(e));
+      } finally {
+        setJoiningRoom(false);
+      }
+    };
     return (
       <Centered>
-        Please sign in to play.{' '}
-        <Link to="/mp" className="underline">
-          back
-        </Link>
+        <div className="text-center">
+          <h2 className="font-serif text-[28px] font-bold text-ink">Join this room</h2>
+          <p className="mt-2 font-sans text-sm text-muted">
+            Room <span className="font-serif font-bold text-ink">{room.code}</span>
+          </p>
+          <input
+            className="input-line mt-6 mx-auto block w-full max-w-[20rem] text-center"
+            placeholder="Your name"
+            value={joinName}
+            onChange={(e) => setJoinName(e.target.value.slice(0, 24))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && joinName.trim() && !joiningRoom) void handleAnonymousJoin();
+            }}
+            maxLength={24}
+            autoFocus
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className="btn-primary mt-4"
+            disabled={!joinName.trim() || joiningRoom}
+            onClick={() => void handleAnonymousJoin()}
+          >
+            {joiningRoom ? 'Joining…' : 'Join room'}
+          </button>
+        </div>
       </Centered>
     );
+  }
 
   const handleSaveProgress = async () => {
     if (!room || !user) return;
@@ -241,25 +297,37 @@ export default function Room() {
               ))}
               {players.length === 0 && <li className="text-muted">Waiting…</li>}
             </ul>
+            {players.length === 1 && (
+              <p className="mt-3 font-sans text-xs text-muted">
+                Share the code with someone to start.
+              </p>
+            )}
           </div>
           {isHost ? (
-            <div className="mt-6 flex items-center gap-3">
-              <label className="font-sans text-xs uppercase tracking-wider text-muted">Timer</label>
-              <select
-                className="input-line w-auto py-1 font-sans text-sm"
-                value={room.timer_seconds}
-                onChange={async (e) => {
-                  await setRoomPhase(room.id, 'lobby', { timer_seconds: Number(e.target.value) });
-                }}
-              >
-                <option value={120}>2 min</option>
-                <option value={180}>3 min</option>
-                <option value={300}>5 min</option>
-                <option value={420}>7 min</option>
-              </select>
-              <button type="button" className="btn-primary ml-auto" onClick={handleStart} disabled={players.length < 2}>
-                Start
-              </button>
+            <div className="mt-6">
+              <div className="flex items-center gap-3">
+                <label className="font-sans text-xs uppercase tracking-wider text-muted">Timer</label>
+                <select
+                  className="input-line w-auto py-1 font-sans text-sm"
+                  value={room.timer_seconds}
+                  onChange={async (e) => {
+                    await setRoomPhase(room.id, 'lobby', { timer_seconds: Number(e.target.value) });
+                  }}
+                >
+                  <option value={120}>2 min</option>
+                  <option value={180}>3 min</option>
+                  <option value={300}>5 min</option>
+                  <option value={420}>7 min</option>
+                </select>
+                <button type="button" className="btn-primary ml-auto" onClick={handleStart} disabled={players.length < 2}>
+                  Start
+                </button>
+              </div>
+              {players.length < 2 && (
+                <p className="mt-2 text-right font-sans text-xs text-muted">
+                  Need at least one more player.
+                </p>
+              )}
             </div>
           ) : (
             <div className="mt-6 font-sans text-sm text-muted">Waiting for host to start…</div>
