@@ -34,3 +34,10 @@ regression.log
 
 # repomix bundles (not source of truth)
 repomix-output.xml
+
+# Cached Wikipedia / Wikidata responses for the famous-people rebuild
+# script. ~10s of MB; safe to delete (regenerated on next run with the
+# --refresh-* flags).
+scripts/data/cache/
+scripts/data/*.tsv
+scripts/data/*.csv

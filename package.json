@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "gen-people": "tsx scripts/generateFamousPeople.ts",
     "gen-rasters": "tsx scripts/generateRasters.ts",
-    "curate": "cd scripts && tsx curate-famous-people.ts"
+    "curate": "cd scripts && tsx curate-famous-people.ts",
+    "build:famous": "tsx scripts/build-famous-people.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
