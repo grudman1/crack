@@ -116,7 +116,7 @@ export function InitialsGrid({
                 {showResults && row.name && onSubmitForReview && (valid || (invalid && row.reason)) && (
                   submittedReviewIndexes?.has(i) ? (
                     <span
-                      className="shrink-0 font-sans text-[10px] uppercase tracking-wider text-muted"
+                      className="ml-auto shrink-0 font-sans text-[10px] uppercase tracking-wider text-muted"
                       aria-label="Submitted for review"
                     >
                       Submitted ✓
@@ -125,7 +125,7 @@ export function InitialsGrid({
                     <button
                       type="button"
                       onClick={() => onSubmitForReview(i)}
-                      className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                      className="ml-auto shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
                       aria-label={`Submit "${row.name}" for review`}
                       title={
                         invalid
