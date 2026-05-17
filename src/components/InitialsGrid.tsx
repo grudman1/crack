@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { ALPHABET } from '@/services/sentenceService';
 import { cn } from '@/lib/utils';
@@ -31,6 +31,7 @@ export function InitialsGrid({
   className,
 }: InitialsGridProps) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const [focused, setFocused] = useState<number | null>(null);
 
   const handleKey = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'ArrowDown') {
@@ -52,11 +53,12 @@ export function InitialsGrid({
           const valid = status === 'valid';
           const invalid = status === 'invalid';
           const unanswered = status === 'unanswered';
+          const isFocused = focused === i;
 
           return (
             <li
               key={alpha}
-              className="grid grid-cols-[3.75rem_minmax(0,1fr)_auto_1.75rem] items-center gap-3 border-b border-hairline px-1 py-2 lg:grid-cols-[4.75rem_minmax(0,1fr)_auto_1.75rem] lg:gap-4 lg:py-2.5"
+              className="grid grid-cols-[3.75rem_minmax(0,1fr)_auto_1.75rem] items-center gap-3 border-b border-hairline px-1 py-[14px] lg:grid-cols-[4.75rem_minmax(0,1fr)_auto_1.75rem] lg:gap-4"
             >
               <span className="letter-pair">
                 {alpha} <span aria-hidden>·</span> {round}
@@ -70,17 +72,22 @@ export function InitialsGrid({
                       unanswered && 'text-empty',
                     )}
                   >
-                    {row.name || ' '}
+                    {row.name || ' '}
                   </span>
                 ) : (
                   <input
                     ref={(el) => {
                       refs.current[i] = el;
                     }}
-                    className="input-line min-w-0 flex-1 text-base lg:text-[17px]"
+                    className={cn(
+                      'input-line min-w-0 flex-1 text-base lg:text-[17px]',
+                      isFocused && 'input-line--active',
+                    )}
                     value={row.name}
                     onChange={(e) => onChange?.(i, e.target.value)}
                     onKeyDown={(e) => handleKey(i, e)}
+                    onFocus={() => setFocused(i)}
+                    onBlur={() => setFocused((f) => (f === i ? null : f))}
                     disabled={readOnly}
                     aria-label={`Answer for ${alpha}${round}`}
                     spellCheck={false}
@@ -97,8 +104,12 @@ export function InitialsGrid({
                 {showResults && valid && (row.points ?? 0) > 0 ? row.points ?? 0 : ''}
               </span>
               <span className="flex h-5 w-5 items-center justify-center" aria-hidden>
-                {showResults && valid && <Check className="h-4 w-4 text-success lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />}
-                {showResults && invalid && <X className="h-4 w-4 text-error lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />}
+                {showResults && valid && (
+                  <Check className="h-4 w-4 text-success lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />
+                )}
+                {showResults && invalid && (
+                  <X className="h-4 w-4 text-error lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />
+                )}
                 {showResults && unanswered && <span className="text-empty">—</span>}
               </span>
             </li>

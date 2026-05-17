@@ -23,7 +23,6 @@ import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
 import { PhaseBanner } from '@/components/PhaseBanner';
 import { PhraseHeader } from '@/components/PhraseHeader';
-import { ExportButtons } from '@/components/ExportButtons';
 import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { cn } from '@/lib/utils';
@@ -227,7 +226,7 @@ export default function Room() {
                 {room.code}
               </div>
             </div>
-            <button type="button" className="btn-ghost text-xs" onClick={copyCode}>
+            <button type="button" className="btn-pill-sm" onClick={copyCode}>
               <Copy className="mr-1 h-3 w-3" strokeWidth={2.25} /> Copy
             </button>
           </div>
@@ -276,7 +275,7 @@ export default function Room() {
         {roomPhrase && <PhraseHeader phrase={roomPhrase} className="mb-6" />}
         <div className="flex items-baseline justify-between">
           <PhaseBanner phase="Round" />
-          <button type="button" className="btn-ghost text-xs" onClick={handleSaveProgress}>
+          <button type="button" className="btn-pill-sm" onClick={handleSaveProgress}>
             Save progress
           </button>
         </div>
@@ -362,7 +361,7 @@ function ValidatingView({
       <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Validating" />
         {isHost && (
-          <button type="button" className="btn-primary text-xs" onClick={onCompute}>
+          <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onCompute}>
             Compute scores
           </button>
         )}
@@ -392,7 +391,7 @@ function ValidatingView({
                         <>
                           <button
                             type="button"
-                            className={cn('btn-ghost px-2 py-1 text-xs', v?.is_valid && 'btn-ghost--selected')}
+                            className={cn('btn-pill-sm', v?.is_valid && 'btn-ghost--selected')}
                             onClick={() => void onVote(s.id, true)}
                             aria-label="valid"
                           >
@@ -400,7 +399,7 @@ function ValidatingView({
                           </button>
                           <button
                             type="button"
-                            className={cn('btn-ghost px-2 py-1 text-xs', v && !v.is_valid && 'btn-ghost--danger')}
+                            className={cn('btn-pill-sm', v && !v.is_valid && 'btn-ghost--danger')}
                             onClick={() => void onVote(s.id, false)}
                             aria-label="invalid"
                           >
@@ -456,7 +455,7 @@ function ResultsView({
       <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Results" />
         {isHost && (
-          <button type="button" className="btn-primary text-xs" onClick={onNewRound}>
+          <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onNewRound}>
             New round
           </button>
         )}
@@ -505,27 +504,6 @@ function ResultsView({
         </details>
       )}
 
-      <div className="mt-6">
-        <ExportButtons
-          payload={{
-            title: 'Crack Multiplayer · my results',
-            sentence: phrase?.text ?? '',
-            letters,
-            totalScore: me?.total,
-            rows: Array.from({ length: 26 }, (_, i) => {
-              const sub = myRows.find((s) => s.row_index === i);
-              const pts = me?.breakdown?.[String(i)] ?? 0;
-              return {
-                rowIndex: i,
-                initials: `${ALPHABET[i]}${letters[i] ?? ''}`,
-                name: sub?.name ?? '',
-                status: sub ? (pts > 0 ? 'valid' : 'invalid') : 'unanswered',
-                points: pts,
-              };
-            }),
-          }}
-        />
-      </div>
     </motion.div>
   );
 }

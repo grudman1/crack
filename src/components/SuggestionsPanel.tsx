@@ -6,13 +6,15 @@ import { ALPHABET } from '@/services/sentenceService';
 interface SuggestionsPanelProps {
   letters: string;
   missedIndexes: number[];
+  /** When true, the panel renders expanded on first paint. */
+  defaultOpen?: boolean;
 }
 
-export function SuggestionsPanel({ letters, missedIndexes }: SuggestionsPanelProps) {
+export function SuggestionsPanel({ letters, missedIndexes, defaultOpen = false }: SuggestionsPanelProps) {
   if (missedIndexes.length === 0) return null;
   return (
     <div className="mt-8">
-      <Accordion type="single" collapsible>
+      <Accordion type="single" collapsible defaultValue={defaultOpen ? 'suggestions' : undefined}>
         <AccordionItem value="suggestions">
           <AccordionTrigger className="font-serif text-base font-bold text-ink">
             Famous folks you missed

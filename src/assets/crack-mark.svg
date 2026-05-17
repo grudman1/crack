@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <rect x="0.5" y="0.5" width="79" height="79" rx="10" fill="#fffdf7" stroke="#e8e6dc" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80" role="img" aria-label="Crack mark">
+  <rect x="0.5" y="0.5" width="79" height="79" rx="8" fill="#fffdf7" stroke="#e8e6dc" stroke-width="1"/>
   <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" text-anchor="middle">
     <text x="40" y="28" font-size="13" fill="#121212">A · T</text>
     <text x="40" y="46" font-size="13" fill="#e8743b">B · H</text>

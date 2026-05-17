@@ -1,0 +1,12 @@
+{
+  "name": "Crack",
+  "short_name": "Crack",
+  "description": "Name a famous person for each pair of initials.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffdf7",
+  "theme_color": "#fffdf7",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

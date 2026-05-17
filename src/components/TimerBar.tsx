@@ -17,10 +17,7 @@ export function TimerBar({ remaining, total, className }: TimerBarProps) {
 
   return (
     <div className={cn('w-full', className)}>
-      <div className="flex items-baseline justify-between font-sans text-xs text-muted">
-        <span>{fmt(remaining)} left</span>
-        <span className="tabular-nums">{fmt(total)}</span>
-      </div>
+      <div className="font-sans text-sm font-medium tabular-nums text-ink">{fmt(remaining)}</div>
       <div className="mt-1 h-[3px] w-full bg-hairline">
         <div
           className="h-full bg-accent transition-[width] duration-1000 ease-linear"

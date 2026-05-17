@@ -5,12 +5,14 @@ import { ALPHABET } from '@/services/sentenceService';
 import { generateRound, type Round } from '@/services/phraseService';
 import { validateName, computeNameInitials } from '@/services/wikiValidationService';
 import { playBeep, playChime, resumeAudio } from '@/services/audioService';
+import { formatToday, getRoundNumber, incrementRoundNumber } from '@/services/roundCounter';
 import { InitialsGrid, type GridRow, type RowStatus } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
-import { PhaseBanner } from '@/components/PhaseBanner';
 import { PhraseHeader } from '@/components/PhraseHeader';
 import { SuggestionsPanel } from '@/components/SuggestionsPanel';
-import { ExportButtons } from '@/components/ExportButtons';
+import { ShareButton } from '@/components/ShareButton';
+import { EndRoundButton } from '@/components/EndRoundButton';
+import { Progress } from '@/components/ui/progress';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { toast } from '@/components/ui/toast';
 
@@ -40,8 +42,10 @@ export default function Solo() {
   const [totalSeconds, setTotalSeconds] = useState(180);
   const [remaining, setRemaining] = useState(180);
   const [round, setRound] = useState<Round | null>(null);
+  const [roundNumber, setRoundNumber] = useState<number>(() => getRoundNumber());
   const [rows, setRows] = useState<AnswerRow[]>(emptyRows);
   const [validationProgress, setValidationProgress] = useState(0);
+  const [interactionKey, setInteractionKey] = useState(0);
   const tickRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -119,12 +123,17 @@ export default function Solo() {
     setRound(r);
     setRows(emptyRows());
     setRemaining(totalSeconds);
+    setInteractionKey(0);
+    setRoundNumber(incrementRoundNumber());
     setPhase('playing');
   };
 
   const handleChange = (i: number, value: string) => {
     const prev = rows[i]?.name ?? '';
-    if (value.length > prev.length) playBeep(800 - i * 6);
+    if (value.length > prev.length) {
+      playBeep(800 - i * 6);
+      setInteractionKey((k) => k + 1);
+    }
     setRows((curr) => {
       const next = curr.slice();
       next[i] = { ...next[i], name: value };
@@ -154,14 +163,16 @@ export default function Solo() {
         transition={{ duration: 0.2, ease: 'easeOut' }}
       >
         <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">Solo</h1>
-        <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">Choose a round length.</p>
+        <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">Choose a round length</p>
 
         <div className="mt-8 flex justify-center gap-2 lg:mt-10 lg:gap-3">
           {TIMER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
-              className={`btn-ghost w-20 lg:!w-24 lg:!py-2.5 lg:!text-base ${totalSeconds === opt.value ? 'btn-ghost--selected' : ''}`}
+              className={`btn-pill-sm !min-h-[2.5rem] !px-4 !text-[14px] ${
+                totalSeconds === opt.value ? 'btn-ghost--selected' : ''
+              }`}
               onClick={() => setTotalSeconds(opt.value)}
             >
               {opt.label}
@@ -169,26 +180,27 @@ export default function Solo() {
           ))}
         </div>
 
-        <div className="mt-6 flex items-baseline justify-center gap-2 font-sans text-sm text-muted">
-          <span>or custom</span>
+        <div className="mt-6 flex items-center justify-center gap-2 font-sans text-sm text-muted">
+          <label htmlFor="custom-seconds" className="text-ink">
+            Custom
+          </label>
           <input
+            id="custom-seconds"
             type="number"
             min={30}
             max={1800}
             value={totalSeconds}
-            onChange={(e) => setTotalSeconds(Math.max(30, Math.min(1800, Number(e.target.value) || 30)))}
-            className="input-line w-16 text-center text-ink"
+            onChange={(e) =>
+              setTotalSeconds(Math.max(30, Math.min(1800, Number(e.target.value) || 30)))
+            }
+            className="input-box w-20 text-center text-ink"
           />
           <span>sec</span>
         </div>
 
         <div className="mt-10 flex justify-center lg:mt-14">
-          <button
-            type="button"
-            className="btn-primary lg:!w-[20rem] lg:!justify-center lg:!px-8 lg:!py-4 lg:!text-[17px]"
-            onClick={start}
-          >
-            Start round <ArrowRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" strokeWidth={2.25} />
+          <button type="button" className="btn-primary w-full max-w-[20rem]" onClick={start}>
+            Start round <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.25} />
           </button>
         </div>
       </motion.div>
@@ -200,24 +212,28 @@ export default function Solo() {
     const checked = Math.min(26, Math.round(validationProgress / (100 / 26)));
     return (
       <div className="frame">
-        {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
-        <PhaseBanner phase="Validating" />
-        <div className="mt-2 flex items-baseline justify-between font-serif">
+        {round && <PhraseHeader phrase={round.phrase} mode="static" className="mb-6" />}
+        <div className="flex items-baseline justify-between font-serif">
           <span className="text-lg font-bold tabular-nums">{checked} / 26</span>
           <span className="font-sans text-xs text-muted">Checking Wikipedia…</span>
         </div>
         <div className="mt-2 h-[3px] w-full bg-hairline">
-          <div className="h-full bg-accent transition-[width] duration-200 ease-linear" style={{ width: `${validationProgress}%` }} />
+          <div
+            className="h-full bg-accent transition-[width] duration-200 ease-linear"
+            style={{ width: `${validationProgress}%` }}
+          />
         </div>
         <div className="mt-6">
           <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly />
         </div>
+        <Progress value={validationProgress} className="hidden" />
       </div>
     );
   }
 
   // ---- Results ----
   if (phase === 'results') {
+    const lowScore = correctCount <= 3;
     return (
       <motion.div
         className="frame"
@@ -225,48 +241,52 @@ export default function Solo() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
       >
-        {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
-        <div className="flex items-baseline justify-between">
-          <div>
-            <PhaseBanner phase="Results" />
-            <div className="mt-1 flex items-baseline gap-3 font-serif">
-              <span className="text-lg font-bold tabular-nums">{correctCount} / 26</span>
-            </div>
+        {round && <PhraseHeader phrase={round.phrase} mode="static" className="mb-8" />}
+
+        {/* Score block */}
+        <div className="flex flex-col items-center text-center">
+          <div className="font-serif text-[48px] font-bold leading-none tabular-nums text-ink lg:text-[56px]">
+            {correctCount} / 26
           </div>
-          <div className="font-serif text-lg font-bold text-ink tabular-nums">{totalScore} pts</div>
-        </div>
-        <div className="mt-2 h-[3px] w-full bg-hairline">
-          <div className="h-full bg-accent" style={{ width: `${(correctCount / 26) * 100}%` }} />
+          <div className="mt-2 font-sans text-[13px] text-muted">
+            {totalScore} pts · {Math.floor(totalSeconds / 60)}:{(totalSeconds % 60).toString().padStart(2, '0')} round
+          </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex justify-center">
+          <button type="button" className="btn-primary w-full max-w-[20rem]" onClick={() => setPhase('setup')}>
+            Play again
+          </button>
+        </div>
+
+        <div className="mt-3 flex justify-center">
+          <ShareButton
+            result={{
+              roundNumber,
+              correctCount,
+              totalCount: 26,
+              rowResults: rows.map((r) => r.status === 'valid'),
+              shareUrl: 'crack-black.vercel.app',
+            }}
+          />
+        </div>
+
+        <div className="mt-6 font-sans text-[13px] leading-relaxed text-center">
+          <div className="text-ink">{formatToday()}</div>
+          <div className="text-muted">Round No. {roundNumber}</div>
+        </div>
+
+        <div className="mt-8">
           <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly showResults />
         </div>
 
-        <SuggestionsPanel letters={round?.letters ?? ''} missedIndexes={missedIndexes} />
+        {lowScore && missedIndexes.length > 0 && (
+          <p className="mt-6 text-center font-serif text-base italic text-muted lg:text-[17px]">
+            Here&apos;s who you could&apos;ve named.
+          </p>
+        )}
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-          <ExportButtons
-            payload={{
-              title: `Crack Solo · ${new Date().toLocaleDateString()}`,
-              sentence: round?.phrase.text ?? '',
-              letters: round?.letters ?? '',
-              totalScore,
-              rows: rows.map((r, i) => ({
-                rowIndex: i,
-                initials: `${ALPHABET[i]}${round?.letters[i] ?? ''}`,
-                name: r.name,
-                status: r.status === 'pending' ? undefined : r.status,
-                canonicalName: r.canonicalName,
-                reason: r.reason,
-                points: r.points,
-              })),
-            }}
-          />
-          <button type="button" className="btn-primary" onClick={() => setPhase('setup')}>
-            New round
-          </button>
-        </div>
+        <SuggestionsPanel letters={round?.letters ?? ''} missedIndexes={missedIndexes} defaultOpen />
       </motion.div>
     );
   }
@@ -274,19 +294,12 @@ export default function Solo() {
   // ---- Playing ----
   return (
     <div className="frame">
-      {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
-      <div className="flex items-baseline justify-between">
-        <PhaseBanner phase="Round" />
-        <button
-          type="button"
-          className="btn-ghost btn-ghost--danger text-xs"
-          onClick={() => setRemaining(0)}
-        >
-          End now
-        </button>
-      </div>
-      <div className="mt-2">
-        <TimerBar remaining={remaining} total={totalSeconds} />
+      {round && <PhraseHeader phrase={round.phrase} mode="auto" interactionKey={interactionKey} className="mb-4" />}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <TimerBar remaining={remaining} total={totalSeconds} />
+        </div>
+        <EndRoundButton onConfirm={() => setRemaining(0)} />
       </div>
       <div className="mt-6">
         <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} onChange={handleChange} />
