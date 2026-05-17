@@ -74,7 +74,6 @@ export default function Solo() {
   const [roundNumber, setRoundNumber] = useState<number>(() => getRoundNumber());
   const [rows, setRows] = useState<AnswerRow[]>(emptyRows);
   const [validationProgress, setValidationProgress] = useState(0);
-  const [interactionKey, setInteractionKey] = useState(0);
   const [reviewModalRow, setReviewModalRow] = useState<number | null>(null);
   const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(() => loadSubmittedKeys());
   const tickRef = useRef<number | null>(null);
@@ -170,7 +169,6 @@ export default function Solo() {
     setRound(r);
     setRows(emptyRows());
     setRemaining(totalSeconds);
-    setInteractionKey(0);
     setRoundNumber(incrementRoundNumber());
     setPhase('playing');
   };
@@ -179,7 +177,6 @@ export default function Solo() {
     const prev = rows[i]?.name ?? '';
     if (value.length > prev.length) {
       playBeep(800 - i * 6);
-      setInteractionKey((k) => k + 1);
     }
     setRows((curr) => {
       const next = curr.slice();
@@ -271,7 +268,6 @@ export default function Solo() {
           remaining={remaining}
           totalSeconds={totalSeconds}
           rows={gridRows}
-          interactionKey={interactionKey}
           onChange={handleChange}
           onEnd={() => setRemaining(0)}
         />

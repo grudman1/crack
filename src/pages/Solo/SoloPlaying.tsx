@@ -9,7 +9,6 @@ interface SoloPlayingProps {
   remaining: number;
   totalSeconds: number;
   rows: GridRow[];
-  interactionKey: number;
   onChange: (i: number, value: string) => void;
   onEnd: () => void;
 }
@@ -19,18 +18,15 @@ export function SoloPlaying({
   remaining,
   totalSeconds,
   rows,
-  interactionKey,
   onChange,
   onEnd,
 }: SoloPlayingProps) {
   return (
     <div className="frame">
-      <PhraseHeader
-        phrase={round.phrase}
-        mode="auto"
-        interactionKey={interactionKey}
-        className="mb-4"
-      />
+      {/* PhraseHeader stays fully visible for the whole round. The
+          auto-collapse mode used to hide it after 3 s or on the first
+          keystroke — players preferred it always visible. */}
+      <PhraseHeader phrase={round.phrase} mode="static" className="mb-4" />
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1">
           <TimerBar remaining={remaining} total={totalSeconds} />
