@@ -3,9 +3,11 @@ import { useState } from 'react';
 import { HelpCircle, Menu, X } from 'lucide-react';
 import { AuthModal } from './AuthModal';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdmin } from '@/hooks/useAdmin';
 
 export function Layout() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useAdmin();
   const [authOpen, setAuthOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
@@ -57,6 +59,7 @@ export function Layout() {
                   { to: '/solo', label: 'Solo' },
                   { to: '/mp', label: 'Multiplayer' },
                   { to: '/how', label: 'How to play' },
+                  ...(isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
                 ].map((item) => (
                   <NavLink
                     key={item.to}

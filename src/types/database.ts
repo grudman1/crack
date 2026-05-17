@@ -1,8 +1,14 @@
+import type { TraceRecord } from '@/services/wikiValidationService';
+
 export type Phase = 'lobby' | 'playing' | 'validating' | 'results';
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'duplicate';
+export type ResolutionType = 'fix_validator' | 'add_to_dataset' | null;
 
 export interface ProfileRow {
   id: string;
   display_name: string;
+  is_admin: boolean;
   created_at: string;
 }
 
@@ -52,6 +58,24 @@ export interface ScoreRow {
   created_at: string;
 }
 
+export interface ValidationReviewRow {
+  id: string;
+  name: string;
+  expected_pair: string;
+  actual_result: 'valid' | 'invalid';
+  reason: string | null;
+  trace: TraceRecord[];
+  player_id: string | null;
+  user_comment: string | null;
+  status: ReviewStatus;
+  resolution_type: ResolutionType;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  resolution_note: string | null;
+  client_fingerprint: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -69,6 +93,11 @@ export interface Database {
       };
       votes: { Row: VoteRow; Insert: Partial<VoteRow>; Update: Partial<VoteRow> };
       scores: { Row: ScoreRow; Insert: Partial<ScoreRow>; Update: Partial<ScoreRow> };
+      validation_reviews: {
+        Row: ValidationReviewRow;
+        Insert: Partial<ValidationReviewRow>;
+        Update: Partial<ValidationReviewRow>;
+      };
     };
     Functions: {
       compute_room_scores: {

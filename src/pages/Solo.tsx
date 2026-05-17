@@ -3,7 +3,11 @@ import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { ALPHABET } from '@/services/sentenceService';
 import { generateRound, type Round } from '@/services/phraseService';
-import { validateName, computeNameInitials } from '@/services/wikiValidationService';
+import {
+  validateName,
+  computeNameInitials,
+  type TraceRecord,
+} from '@/services/wikiValidationService';
 import { playBeep, playChime, resumeAudio } from '@/services/audioService';
 import { formatToday, getRoundNumber, incrementRoundNumber } from '@/services/roundCounter';
 import { InitialsGrid, type GridRow, type RowStatus } from '@/components/InitialsGrid';
@@ -12,6 +16,7 @@ import { PhraseHeader } from '@/components/PhraseHeader';
 import { SuggestionsPanel } from '@/components/SuggestionsPanel';
 import { ShareButton } from '@/components/ShareButton';
 import { EndRoundButton } from '@/components/EndRoundButton';
+import { ReviewSubmitModal } from '@/components/ReviewSubmitModal';
 import { Progress } from '@/components/ui/progress';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { toast } from '@/components/ui/toast';
@@ -31,10 +36,39 @@ interface AnswerRow {
   reason?: string;
   canonicalName?: string;
   points?: number;
+  /** Captured during runValidation for invalid rows so we can pass it
+   *  to the review modal without re-running the validator. */
+  trace?: TraceRecord[];
 }
 
 function emptyRows(): AnswerRow[] {
   return Array.from({ length: 26 }, () => ({ name: '' }));
+}
+
+const SUBMITTED_KEY = 'crack:submitted_reviews';
+const submittedKey = (name: string, pair: string) =>
+  `${name.trim().toLowerCase()}|${pair.toUpperCase()}`;
+
+function loadSubmittedKeys(): Set<string> {
+  try {
+    if (typeof localStorage === 'undefined') return new Set();
+    const raw = localStorage.getItem(SUBMITTED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr.filter((x): x is string => typeof x === 'string'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSubmittedKeys(keys: Set<string>) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...keys]));
+  } catch {
+    /* swallow — feedback is best-effort */
+  }
 }
 
 export default function Solo() {
@@ -46,6 +80,8 @@ export default function Solo() {
   const [rows, setRows] = useState<AnswerRow[]>(emptyRows);
   const [validationProgress, setValidationProgress] = useState(0);
   const [interactionKey, setInteractionKey] = useState(0);
+  const [reviewModalRow, setReviewModalRow] = useState<number | null>(null);
+  const [submittedKeys, setSubmittedKeys] = useState<Set<string>>(() => loadSubmittedKeys());
   const tickRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -79,15 +115,35 @@ export default function Solo() {
       } else {
         const localInitials = computeNameInitials(name);
         if (localInitials && localInitials !== expected) {
+          // Synthesize a minimal trace for the modal so admins see what
+          // happened even on a local-only rejection.
           next[i] = {
             ...next[i]!,
             status: 'invalid',
             reason: `expected ${expected}, got ${localInitials}`,
             points: 0,
+            trace: [
+              {
+                stage: 'gate',
+                label: 'Initials',
+                outcome: 'miss',
+                note: `expected ${expected}, got ${localInitials}`,
+              },
+              {
+                stage: 'final',
+                label: 'Reject',
+                outcome: 'info',
+                note: `expected ${expected}, got ${localInitials}`,
+              },
+            ],
           };
         } else {
+          const trace: TraceRecord[] = [];
           try {
-            const result = await validateName(name, { expectedInitials: expected });
+            const result = await validateName(name, {
+              expectedInitials: expected,
+              trace: (r) => trace.push(r),
+            });
             if (result.status === 'valid') {
               next[i] = {
                 ...next[i]!,
@@ -96,10 +152,10 @@ export default function Solo() {
                 points: 10,
               };
             } else {
-              next[i] = { ...next[i]!, status: 'invalid', reason: result.reason, points: 0 };
+              next[i] = { ...next[i]!, status: 'invalid', reason: result.reason, points: 0, trace };
             }
           } catch (err) {
-            next[i] = { ...next[i]!, status: 'invalid', reason: sanitizeError(err), points: 0 };
+            next[i] = { ...next[i]!, status: 'invalid', reason: sanitizeError(err), points: 0, trace };
             toast.error(sanitizeError(err));
           }
         }
@@ -152,6 +208,39 @@ export default function Solo() {
     () => rows.map((r, i) => (r.status === 'invalid' || r.status === 'unanswered' ? i : -1)).filter((i) => i >= 0),
     [rows],
   );
+
+  // Map the global submitted-keys set into per-row-index booleans for
+  // the current round's rows.
+  const submittedRowIndexes = useMemo(() => {
+    const out = new Set<number>();
+    rows.forEach((r, i) => {
+      if (!round || !r.name || r.status !== 'invalid') return;
+      const expected = `${ALPHABET[i]}${round.letters[i] ?? ''}`;
+      if (submittedKeys.has(submittedKey(r.name, expected))) out.add(i);
+    });
+    return out;
+  }, [rows, round, submittedKeys]);
+
+  const modalContext = useMemo(() => {
+    if (reviewModalRow === null || !round) return null;
+    const r = rows[reviewModalRow];
+    if (!r) return null;
+    const pair = `${ALPHABET[reviewModalRow]}${round.letters[reviewModalRow] ?? ''}`;
+    return { name: r.name, expectedPair: pair, reason: r.reason ?? null, trace: r.trace ?? [] };
+  }, [reviewModalRow, round, rows]);
+
+  const handleSubmitted = useCallback(() => {
+    if (reviewModalRow === null || !round) return;
+    const r = rows[reviewModalRow];
+    if (!r?.name) return;
+    const pair = `${ALPHABET[reviewModalRow]}${round.letters[reviewModalRow] ?? ''}`;
+    setSubmittedKeys((curr) => {
+      const next = new Set(curr);
+      next.add(submittedKey(r.name, pair));
+      saveSubmittedKeys(next);
+      return next;
+    });
+  }, [reviewModalRow, round, rows]);
 
   // ---- Setup ----
   if (phase === 'setup') {
@@ -277,7 +366,14 @@ export default function Solo() {
         </div>
 
         <div className="mt-8">
-          <InitialsGrid letters={round?.letters ?? ''} rows={gridRows} readOnly showResults />
+          <InitialsGrid
+            letters={round?.letters ?? ''}
+            rows={gridRows}
+            readOnly
+            showResults
+            onSubmitForReview={(i) => setReviewModalRow(i)}
+            submittedReviewIndexes={submittedRowIndexes}
+          />
         </div>
 
         {lowScore && missedIndexes.length > 0 && (
@@ -287,6 +383,17 @@ export default function Solo() {
         )}
 
         <SuggestionsPanel letters={round?.letters ?? ''} missedIndexes={missedIndexes} defaultOpen />
+
+        {modalContext && (
+          <ReviewSubmitModal
+            open={reviewModalRow !== null}
+            onOpenChange={(o) => {
+              if (!o) setReviewModalRow(null);
+            }}
+            context={modalContext}
+            onSubmitted={handleSubmitted}
+          />
+        )}
       </motion.div>
     );
   }

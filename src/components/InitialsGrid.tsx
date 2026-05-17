@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, HelpCircle, X } from 'lucide-react';
 import { ALPHABET } from '@/services/sentenceService';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +20,14 @@ interface InitialsGridProps {
   readOnly?: boolean;
   showResults?: boolean;
   className?: string;
+  /** When showing results, an invalid row may offer the player a "?"
+   *  link that opens a review-submission flow. Caller maps the index
+   *  back to its own row data. Omitting this prop hides the icon. */
+  onSubmitForReview?: (index: number) => void;
+  /** Indexes whose review has already been submitted. The "?" is
+   *  replaced with a muted "Submitted ✓" badge so the player doesn't
+   *  re-submit. */
+  submittedReviewIndexes?: Set<number>;
 }
 
 export function InitialsGrid({
@@ -29,6 +37,8 @@ export function InitialsGrid({
   readOnly = false,
   showResults = false,
   className,
+  onSubmitForReview,
+  submittedReviewIndexes,
 }: InitialsGridProps) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
   const [focused, setFocused] = useState<number | null>(null);
@@ -98,6 +108,26 @@ export function InitialsGrid({
                   <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error lg:text-[13px]">
                     {row.reason}
                   </span>
+                )}
+                {showResults && invalid && row.reason && row.name && onSubmitForReview && (
+                  submittedReviewIndexes?.has(i) ? (
+                    <span
+                      className="shrink-0 font-sans text-[10px] uppercase tracking-wider text-muted"
+                      aria-label="Submitted for review"
+                    >
+                      Submitted ✓
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSubmitForReview(i)}
+                      className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                      aria-label={`Submit "${row.name}" for review`}
+                      title="This should count — submit for review"
+                    >
+                      <HelpCircle className="h-[14px] w-[14px]" strokeWidth={1.75} />
+                    </button>
+                  )
                 )}
               </div>
               <span className="font-serif text-sm tabular-nums text-muted lg:text-base">

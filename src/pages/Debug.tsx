@@ -22,6 +22,7 @@ import {
 } from '@/services/wikiValidationService';
 import { ACCEPT_CASES, REJECT_CASES, type RegressionCase } from '@/data/regressionSet';
 import { toast } from '@/components/ui/toast';
+import { pairToDot, renderTrace } from '@/lib/traceFormat';
 
 interface AdhocRun {
   name: string;
@@ -341,32 +342,6 @@ function StatusGlyph({ status }: { status: RegressionRow['status'] }) {
   if (status === 'fail') return <X className="h-3.5 w-3.5 text-error" strokeWidth={2.5} />;
   if (status === 'running') return <Loader2 className="h-3.5 w-3.5 animate-spin text-muted" />;
   return <span className="font-mono text-xs text-muted">—</span>;
-}
-
-function pairToDot(pair: string): string {
-  const u = pair.toUpperCase();
-  if (u.length !== 2) return u;
-  return `${u[0]} · ${u[1]}`;
-}
-
-function renderTrace(trace: TraceRecord[]): string {
-  if (trace.length === 0) return '(no trace)';
-  const lines: string[] = [];
-  for (let i = 0; i < trace.length; i++) {
-    const r = trace[i]!;
-    const last = i === trace.length - 1;
-    const branch = last ? '└─' : '├─';
-    const icon =
-      r.outcome === 'hit'
-        ? '✓'
-        : r.outcome === 'miss'
-          ? '✗'
-          : r.outcome === 'skip'
-            ? '·'
-            : ' ';
-    lines.push(`${branch} ${icon} [${r.stage}] ${r.label} — ${r.note}`);
-  }
-  return lines.join('\n');
 }
 
 function buildFullReport(rows: RegressionRow[]): string {
