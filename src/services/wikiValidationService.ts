@@ -609,27 +609,40 @@ async function getDisambigLinks(title: string): Promise<string[]> {
   return links;
 }
 
-async function isPerson(summary: WikiSummary | null): Promise<boolean> {
-  if (!summary) return false;
-  if (summary.type === 'disambiguation') return false;
+/** Why the person check decided what it did. Surfaced into trace details
+ *  so the post-round "why was this rejected?" modal can render a friendly
+ *  explanation ("X is a fictional character" / "X is a place"). The
+ *  boolean pass/fail semantics are unchanged — `ok` is what callers use
+ *  to gate accept; `kind` is metadata. */
+export type PersonKind =
+  | 'human'      // Wikidata P31 ⊇ Q5, or extract looks biographical
+  | 'fictional'  // Wikidata P31 includes a known fictional-class QID
+  | 'disambig'   // Wikipedia summary `type` is 'disambiguation'
+  | 'other'      // Wikidata responded but the entity is neither human nor fictional (place, org, etc.)
+  | 'unknown';   // No summary or no Wikidata info and the heuristics didn't trigger
+
+async function isPerson(summary: WikiSummary | null): Promise<{ ok: boolean; kind: PersonKind }> {
+  if (!summary) return { ok: false, kind: 'unknown' };
+  if (summary.type === 'disambiguation') return { ok: false, kind: 'disambig' };
   const qid = summary.wikibase_item;
   if (qid) {
     const wd = await getWikidata(qid);
     if (wd) {
-      if (wd.fictional) return false;
-      return wd.human;
+      if (wd.fictional) return { ok: false, kind: 'fictional' };
+      if (wd.human) return { ok: true, kind: 'human' };
+      return { ok: false, kind: 'other' };
     }
   }
   // Fallback heuristics for when Wikidata is unavailable or missing P31.
   const extract = summary.extract ?? '';
-  if (/\(born\s+\d{1,2}\s+\w+|\(born\s+\d{3,4}\)/i.test(extract)) return true;
-  if (/\bborn\b\s+\d{1,2}\s+\w+\s+\d{3,4}/i.test(extract)) return true;
-  if (/\(\d{3,4}\s*[–\-—]\s*(?:\d{3,4}|present)\)/i.test(extract)) return true;
+  if (/\(born\s+\d{1,2}\s+\w+|\(born\s+\d{3,4}\)/i.test(extract)) return { ok: true, kind: 'human' };
+  if (/\bborn\b\s+\d{1,2}\s+\w+\s+\d{3,4}/i.test(extract)) return { ok: true, kind: 'human' };
+  if (/\(\d{3,4}\s*[–\-—]\s*(?:\d{3,4}|present)\)/i.test(extract)) return { ok: true, kind: 'human' };
   // Wikipedia biography opener: "<Name> (…) was/is/were a/an/the <profession>"
   // The first sentence of a biographical article almost always uses this form.
   const firstSentence = extract.split(/\.\s/, 1)[0] ?? '';
-  if (/\b(?:is|was|were)\s+(?:an?|the)\s+[A-Z]?[a-z]/i.test(firstSentence)) return true;
-  return false;
+  if (/\b(?:is|was|were)\s+(?:an?|the)\s+[A-Z]?[a-z]/i.test(firstSentence)) return { ok: true, kind: 'human' };
+  return { ok: false, kind: 'unknown' };
 }
 
 function asValid(summary: WikiSummary): ValidationResult {
@@ -682,19 +695,22 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       });
       const exact = await getSummary(name);
       const exactCands = exact ? canonicalInitialsCandidates(exact.title) : [];
+      const exactPerson = exact && exact.type === 'standard' && exactCands.includes(expected)
+        ? await isPerson(exact)
+        : null;
       if (
         exact &&
         exact.type === 'standard' &&
         exact.title.toLowerCase() !== name.toLowerCase() &&
         exactCands.includes(expected) &&
-        (await isPerson(exact))
+        exactPerson?.ok
       ) {
         trace?.({
           stage: '1tok-redirect',
           label: '1-token redirect',
           outcome: 'hit',
           note: `redirected to "${exact.title}" (initials ${exactCands.join('/')}) — person`,
-          detail: { canonicalTitle: exact.title },
+          detail: { canonicalTitle: exact.title, personKind: 'human' },
         });
         trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${exact.title}` });
         return asValid(exact);
@@ -706,6 +722,9 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
         note: exact
           ? `got "${exact.title}" (type=${exact.type}, initials=${exactCands.join('/') || '—'}) — does not match expected ${expected}`
           : 'no Wikipedia article',
+        detail: exact
+          ? { canonical: exact.title, personKind: exactPerson?.kind ?? 'unknown' }
+          : undefined,
       });
     } else {
       trace?.({
@@ -825,25 +844,29 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       const initialsOK = titleCands.includes(targetInitials);
       const ratioOK = wordLengthRatioOK(name, exact.title);
       const personChecked = initialsOK && ratioOK;
-      const person = personChecked ? await isPerson(exact) : false;
-      if (initialsOK && ratioOK && person) {
+      const personResult = personChecked ? await isPerson(exact) : null;
+      if (initialsOK && ratioOK && personResult?.ok) {
         trace?.({
           stage: 'exact',
           label: 'Wikipedia exact-title',
           outcome: 'hit',
           note: `"${exact.title}" — initials ${titleInitialsLabel} ✓, length ratio ✓, person ✓`,
-          detail: { canonical: exact.title, wikibase_item: exact.wikibase_item },
+          detail: { canonical: exact.title, wikibase_item: exact.wikibase_item, personKind: personResult.kind },
         });
         trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${exact.title}` });
         return asValid(exact);
       }
-      const personLabel = personChecked ? (person ? '✓' : '✗') : 'skipped';
+      const personLabel = personChecked ? (personResult?.ok ? '✓' : '✗') : 'skipped';
       trace?.({
         stage: 'exact',
         label: 'Wikipedia exact-title',
         outcome: 'miss',
         note: `"${exact.title}" — initials ${titleInitialsLabel} ${initialsOK ? '✓' : '✗'}, ratio ${ratioOK ? '✓' : '✗'}, person ${personLabel}`,
-        detail: { canonical: exact.title, initials: titleInitialsLabel },
+        detail: {
+          canonical: exact.title,
+          initials: titleInitialsLabel,
+          ...(personResult ? { personKind: personResult.kind } : {}),
+        },
       });
     }
   } else {
@@ -896,13 +919,14 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       });
       continue;
     }
-    if (await isPerson(sum)) {
+    const prefPerson = await isPerson(sum);
+    if (prefPerson.ok) {
       trace?.({
         stage: 'prefix-connector',
         label: 'Prefix-with-connector',
         outcome: 'hit',
         note: `typed prefix matches "${hitTitle}" with connector — person ✓`,
-        detail: { canonical: sum.title },
+        detail: { canonical: sum.title, personKind: prefPerson.kind },
       });
       trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${sum.title}` });
       return asValid(sum);
@@ -912,6 +936,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       label: 'Prefix-with-connector',
       outcome: 'miss',
       note: `"${hitTitle}" — not a person`,
+      detail: { canonical: sum.title, personKind: prefPerson.kind },
     });
   }
 
@@ -931,13 +956,14 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       const sum = await getSummary(linkTitle);
       if (!sum || sum.type === 'disambiguation') continue;
       evaluated += 1;
-      if (await isPerson(sum)) {
+      const disPerson = await isPerson(sum);
+      if (disPerson.ok) {
         trace?.({
           stage: 'disambig',
           label: 'Disambig wikitext',
           outcome: 'hit',
           note: `picked "${sum.title}" (link #${evaluated} with matching initials, is a person)`,
-          detail: { canonical: sum.title, linksScanned: links.length },
+          detail: { canonical: sum.title, linksScanned: links.length, personKind: disPerson.kind },
         });
         trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${sum.title}` });
         return asValid(sum);
@@ -990,6 +1016,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     let firstNameOK: 'pass' | 'fail' | 'unknown' = 'unknown';
     let surnameOK: 'pass' | 'fail' | 'unknown' = 'unknown';
     let personOK: 'pass' | 'fail' | 'unknown' = 'unknown';
+    let personKind: PersonKind | undefined;
     let nameCheck: IterateNameCheck | null = null;
     let qid: string | undefined;
     let sum: WikiSummary | null = null;
@@ -1027,8 +1054,11 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
           if (!sum || sum.type === 'disambiguation') {
             // No summary to person-check → can't verify → reject.
             rejectedBy = 'person';
+            personKind = sum?.type === 'disambiguation' ? 'disambig' : 'unknown';
           } else {
-            personOK = (await isPerson(sum)) ? 'pass' : 'fail';
+            const cls = await isPerson(sum);
+            personOK = cls.ok ? 'pass' : 'fail';
+            personKind = cls.kind;
             if (personOK !== 'pass') rejectedBy = 'person';
           }
         }
@@ -1049,6 +1079,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       rejectedBy,
     };
     if (qid) detail.qid = qid;
+    if (personKind) detail.personKind = personKind;
 
     if (rejectedBy === null && personOK === 'pass' && sum) {
       trace?.({
