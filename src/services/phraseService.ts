@@ -67,15 +67,29 @@ function phraseId(p: Phrase): string {
   return p.letters;
 }
 
+// Module-level memory of the most recently picked phrase id. Survives
+// re-mounts in the same tab even when `localStorage` is unavailable
+// (iOS Private mode, ITP purge, quota errors) so we can still
+// guarantee no back-to-back repeats. Storage handles the longer
+// 30-round window; this handles the one-step guarantee.
+let lastPickedId: string | null = null;
+
 export function pickPhrase(): Phrase {
   if (PHRASES.length === 0) {
     throw new Error('Phrase pool is empty — re-run scripts/seedPhrases.py');
   }
   const recent = new Set(readRecent());
-  let pool = PHRASES.filter((p) => !recent.has(phraseId(p)));
+  const excluded = new Set(recent);
+  if (lastPickedId !== null) excluded.add(lastPickedId);
+
+  let pool = PHRASES.filter((p) => !excluded.has(phraseId(p)));
+  // Only happens if the pool is a single phrase — in that case we
+  // have no choice but to repeat.
   if (pool.length === 0) pool = PHRASES;
+
   const choice = pool[Math.floor(Math.random() * pool.length)]!;
-  writeRecent([...recent, phraseId(choice)]);
+  lastPickedId = phraseId(choice);
+  writeRecent([...recent, lastPickedId]);
   return choice;
 }
 

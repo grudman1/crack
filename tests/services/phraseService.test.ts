@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PHRASES } from '@/data/phrases';
-import { normalize, findPhraseByLetters, generateRound } from '@/services/phraseService';
+import {
+  normalize,
+  findPhraseByLetters,
+  generateRound,
+  pickPhrase,
+} from '@/services/phraseService';
 
 describe('phraseService', () => {
   it('has at least 1000 phrases', () => {
@@ -51,5 +56,65 @@ describe('phraseService', () => {
     for (const p of PHRASES) {
       expect(allowed.has(p.sourceType)).toBe(true);
     }
+  });
+});
+
+describe('pickPhrase — no back-to-back repeats', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('with working storage, 30 consecutive picks return 30 distinct phrases', () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      ids.add(pickPhrase().letters);
+    }
+    expect(ids.size).toBe(30);
+  });
+
+  // Regression test for the production bug: when localStorage.setItem
+  // silently fails (iOS Private mode, ITP purge, quota), every pick
+  // saw an empty `recent` list and could return the prior phrase.
+  it('with localStorage.setItem throwing, two consecutive picks are still distinct', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    // Pin Math.random so both calls would otherwise hit the same index.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const first = pickPhrase();
+    const second = pickPhrase();
+    expect(second.letters).not.toBe(first.letters);
+  });
+
+  // Run many iterations under broken storage — the guarantee has to
+  // hold for every adjacent pair, not just one lucky run.
+  it('with localStorage.setItem throwing, 100 consecutive picks have no back-to-back repeat', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    let prev = pickPhrase().letters;
+    for (let i = 0; i < 99; i++) {
+      const next = pickPhrase().letters;
+      expect(next).not.toBe(prev);
+      prev = next;
+    }
+  });
+
+  it('with no localStorage at all, pickPhrase still avoids back-to-back repeats', () => {
+    vi.stubGlobal('localStorage', undefined);
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+
+    const first = pickPhrase();
+    const second = pickPhrase();
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(second.letters).not.toBe(first.letters);
   });
 });
