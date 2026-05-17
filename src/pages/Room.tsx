@@ -21,7 +21,6 @@ import { ALPHABET } from '@/services/sentenceService';
 import { generateRound, findPhraseByLetters, type Phrase } from '@/services/phraseService';
 import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
-import { PhaseBanner } from '@/components/PhaseBanner';
 import { PhraseHeader } from '@/components/PhraseHeader';
 import { ShareButton } from '@/components/ShareButton';
 import {
@@ -34,7 +33,7 @@ import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { buildMultiplayerShareText, type RowOutcome } from '@/lib/share';
 import { cn } from '@/lib/utils';
-import { getRoundNumber } from '@/services/roundCounter';
+import { formatToday, getRoundNumber } from '@/services/roundCounter';
 
 export default function Room() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -252,35 +251,49 @@ export default function Room() {
       }
     };
     return (
-      <Centered>
-        <div className="text-center">
-          <h2 className="font-serif text-[28px] font-bold text-ink">Join this room</h2>
-          <p className="mt-2 font-sans text-sm text-muted">
-            Room <span className="font-serif font-bold text-ink">{room.code}</span>
-          </p>
-          <input
-            className="input-line mt-6 mx-auto block w-full max-w-[20rem] text-center"
-            placeholder="Your name"
-            value={joinName}
-            onChange={(e) => setJoinName(e.target.value.slice(0, 24))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && joinName.trim() && !joiningRoom) void handleAnonymousJoin();
-            }}
-            maxLength={24}
-            autoFocus
-            autoCorrect="off"
-            spellCheck={false}
-          />
+      <motion.div
+        className="frame"
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
+        <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">
+          Join this room
+        </h1>
+        <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">
+          Room <span className="not-italic font-bold text-ink">{room.code}</span>
+        </p>
+        <div className="mt-8">
+          <label className="block">
+            <span className="font-sans text-xs uppercase tracking-wider text-muted">Your name</span>
+            <input
+              className="input-line mt-1 font-sans text-base"
+              placeholder="Your name"
+              value={joinName}
+              onChange={(e) => setJoinName(e.target.value.slice(0, 24))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && joinName.trim() && !joiningRoom) {
+                  void handleAnonymousJoin();
+                }
+              }}
+              maxLength={24}
+              autoFocus
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </label>
+        </div>
+        <div className="mt-6 flex justify-center">
           <button
             type="button"
-            className="btn-primary mt-4"
+            className="btn-primary w-full max-w-[20rem]"
             disabled={!joinName.trim() || joiningRoom}
             onClick={() => void handleAnonymousJoin()}
           >
             {joiningRoom ? 'Joining…' : 'Join room'}
           </button>
         </div>
-      </Centered>
+      </motion.div>
     );
   }
 
@@ -347,6 +360,8 @@ export default function Room() {
   };
 
   if (room.phase === 'lobby') {
+    const lobbySubtitle =
+      players.length <= 1 ? 'Share the code to start.' : 'Waiting for the host to start…';
     return (
       <motion.div
         className="frame"
@@ -354,36 +369,37 @@ export default function Room() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
       >
-        <PhaseBanner phase="Lobby" />
-        <section className="panel mt-4 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-sans text-xs uppercase tracking-wider text-muted">Room code</div>
-              <div className="mt-1 font-serif text-3xl font-bold tracking-[0.25em] tabular-nums text-ink">
-                {room.code}
-              </div>
-            </div>
-            <button type="button" className="btn-pill-sm" onClick={copyCode}>
-              <Copy className="mr-1 h-3 w-3" strokeWidth={2.25} /> Copy
-            </button>
+        <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">
+          Lobby
+        </h1>
+        <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">
+          {lobbySubtitle}
+        </p>
+
+        {/* Room code is the most important thing on this screen — treat
+            it like Solo Results treats X / 26: centered, giant serif,
+            tracked, with Copy as a pill below. */}
+        <div className="mt-8 flex flex-col items-center text-center">
+          <div className="font-sans text-xs uppercase tracking-wider text-muted">Room code</div>
+          <div className="mt-2 font-serif text-[48px] font-bold leading-none tracking-[0.25em] tabular-nums text-ink lg:text-[56px]">
+            {room.code}
           </div>
-          <div className="mt-6">
-            <div className="font-sans text-xs uppercase tracking-wider text-muted">Players</div>
-            <ul className="mt-2 space-y-1 font-sans text-sm text-ink">
-              {players.map((p) => (
-                <li key={p.id}>
-                  {p.profile?.display_name ?? 'Player'}
-                  {p.player_id === room.host_id && <span className="text-muted"> · host</span>}
-                </li>
-              ))}
-              {players.length === 0 && <li className="text-muted">Waiting…</li>}
-            </ul>
-            {players.length === 1 && (
-              <p className="mt-3 font-sans text-xs text-muted">
-                Share the code with someone to start.
-              </p>
-            )}
-          </div>
+          <button type="button" className="btn-pill-sm mt-4" onClick={copyCode}>
+            <Copy className="mr-1 h-3 w-3" strokeWidth={2.25} /> Copy
+          </button>
+        </div>
+
+        <section className="panel mt-8 p-5">
+          <div className="font-sans text-xs uppercase tracking-wider text-muted">Players</div>
+          <ul className="mt-2 space-y-1 font-sans text-sm text-ink">
+            {players.map((p) => (
+              <li key={p.id}>
+                {p.profile?.display_name ?? 'Player'}
+                {p.player_id === room.host_id && <span className="text-muted"> · host</span>}
+              </li>
+            ))}
+            {players.length === 0 && <li className="text-muted">Waiting…</li>}
+          </ul>
           {isHost ? (
             <div className="mt-6">
               <div className="flex items-center gap-3">
@@ -420,22 +436,32 @@ export default function Room() {
 
   if (room.phase === 'playing') {
     return (
-      <div className="frame">
+      <motion.div
+        className="frame"
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+      >
         {roomPhrase && <PhraseHeader phrase={roomPhrase} className="mb-6" />}
-        <PhaseBanner phase="Round" />
         <div className="mt-2">
           <TimerBar remaining={remaining} total={room.timer_seconds} />
         </div>
-        {/* Per-player progress strip — populated below in Item 2 */}
+        {/* Single-line progress strip with " · " separators between
+            players. Your row keeps the ink-bold treatment; others
+            stay muted. Compact so it doesn't fight the grid for
+            attention. */}
         {players.length > 1 && (
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs text-muted">
-            {players.map((p) => {
+          <div className="mt-3 font-sans text-xs text-muted">
+            {players.map((p, idx) => {
               const count = submissionsByPlayer[p.player_id] ?? 0;
               const isMe = p.player_id === user.id;
               const name = isMe ? 'You' : p.profile?.display_name ?? 'Player';
               return (
-                <span key={p.player_id} className={isMe ? 'text-ink font-semibold' : ''}>
-                  {name} <span className="tabular-nums">{count}/26</span>
+                <span key={p.player_id}>
+                  {idx > 0 && <span className="mx-2 text-muted/60">·</span>}
+                  <span className={isMe ? 'font-semibold text-ink' : ''}>
+                    {name} <span className="tabular-nums">{count}/26</span>
+                  </span>
                 </span>
               );
             })}
@@ -444,7 +470,7 @@ export default function Room() {
         <div className="mt-6">
           <InitialsGrid letters={room.letters_26 ?? ''} rows={myGridRows} onChange={handleChangeAnswer} />
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -519,23 +545,33 @@ function ValidatingView({
   };
 
   return (
-    <div className="frame">
+    <motion.div
+      className="frame"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+    >
       {phrase && <PhraseHeader phrase={phrase} className="mb-6" />}
-      <div className="flex items-baseline justify-between">
-        <PhaseBanner phase="Validating" />
-        {isHost && (
-          <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onCompute}>
+      <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">
+        Validating
+      </h1>
+      <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">
+        Vote on each other&apos;s answers.
+      </p>
+      {isHost && (
+        <div className="mt-6 flex justify-center">
+          <button type="button" className="btn-pill-sm btn-pill-sm--dark" onClick={onCompute}>
             Compute scores
           </button>
-        )}
-      </div>
-      <ul className="mt-4 divide-y divide-hairline border-t border-hairline">
+        </div>
+      )}
+      <ul className="mt-6 divide-y divide-hairline border-t border-hairline">
         {Array.from({ length: 26 }, (_, i) => i).map((i) => {
           const subs = byRow[i] ?? [];
           if (subs.length === 0) return null;
           const initials = `${ALPHABET[i]} · ${letters[i] ?? ''}`;
           return (
-            <li key={i} className="py-3">
+            <li key={i} className="py-4">
               <div className="letter-pair">{initials}</div>
               <ul className="mt-2 space-y-1.5">
                 {subs.map((s) => {
@@ -580,7 +616,7 @@ function ValidatingView({
           );
         })}
       </ul>
-    </div>
+    </motion.div>
   );
 }
 
@@ -625,38 +661,72 @@ function ResultsView({
   }, [me, myRows]);
   const myPlacement = me ? sorted.findIndex((s) => s.player_id === userId) + 1 : 0;
 
+  const placementLabel =
+    me && myPlacement > 0 ? `${ordinalize(myPlacement)} of ${sorted.length}` : null;
+  const localRoundNumber = getRoundNumber();
+
   return (
     <motion.div
       className="frame"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
     >
       {phrase && <PhraseHeader phrase={phrase} className="mb-6" />}
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <PhaseBanner phase="Results" />
-        <div className="flex items-center gap-2">
-          {me && myPlacement > 0 && (
-            <ShareButton
-              title={`Crack · MP · Round #${getRoundNumber()}`}
-              label="Share"
-              text={buildMultiplayerShareText({
-                roundNumber: getRoundNumber(),
-                placement: myPlacement,
-                totalPlayers: sorted.length,
-                points: me.total,
-                rowOutcomes,
-              })}
-            />
-          )}
-          {isHost && (
-            <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onNewRound}>
-              New round
-            </button>
-          )}
+
+      {/* Centered score block — your total points as the giant
+          serif numeral, placement (Xth of N) as the muted line below.
+          Same visual rhythm as Solo's "X / 26" + "pts · timer" pair. */}
+      <div className="flex flex-col items-center text-center">
+        <div className="font-serif text-[48px] font-bold leading-none tabular-nums text-ink lg:text-[56px]">
+          {me?.total ?? 0}
+        </div>
+        <div className="mt-2 font-sans text-[13px] text-muted">
+          {placementLabel ? `${placementLabel} · ${me?.total ?? 0} pts` : `${me?.total ?? 0} pts`}
         </div>
       </div>
-      <section className="panel mt-4 p-5">
+
+      {/* Primary action slot — host gets the New round button,
+          non-hosts see a quiet "waiting" line in the same vertical
+          position so the layout doesn't shift between roles. */}
+      <div className="mt-6 flex justify-center">
+        {isHost ? (
+          <button
+            type="button"
+            className="btn-primary w-full max-w-[20rem]"
+            onClick={onNewRound}
+          >
+            New round
+          </button>
+        ) : (
+          <p className="font-sans text-sm text-muted">
+            Waiting for the host to start a new round…
+          </p>
+        )}
+      </div>
+
+      {me && myPlacement > 0 && (
+        <div className="mt-3 flex justify-center">
+          <ShareButton
+            title={`Crack · MP · Round #${localRoundNumber}`}
+            label="Share"
+            text={buildMultiplayerShareText({
+              roundNumber: localRoundNumber,
+              placement: myPlacement,
+              totalPlayers: sorted.length,
+              points: me.total,
+              rowOutcomes,
+            })}
+          />
+        </div>
+      )}
+
+      <div className="mt-6 font-sans text-[13px] leading-relaxed text-center">
+        <div className="text-ink">{formatToday()}</div>
+        <div className="text-muted">Round No. {localRoundNumber}</div>
+      </div>
+
+      <section className="panel mt-8 p-5">
         <h2 className="font-serif text-lg font-bold text-ink">Leaderboard</h2>
         <ol className="mt-2 space-y-1">
           {sorted.map((s, idx) => {
@@ -712,4 +782,19 @@ function ResultsView({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="frame py-16 text-center font-sans text-sm text-muted">{children}</div>;
+}
+
+function ordinalize(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
 }

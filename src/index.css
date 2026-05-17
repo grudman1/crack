@@ -180,6 +180,28 @@
     background-color: hsl(var(--accent) / 0.12);
     border-color: hsl(var(--accent));
   }
+  /* Filled-dark variant of the small pill. Use this for host
+     actions that should read as "primary at the small size" —
+     Compute scores in MP validating, New round in MP results.
+     Replaces a couple of one-off inline overrides
+     (bg-ink !text-paper hover:!bg-[#2a2a2a]) with a named primitive. */
+  .btn-pill-sm--dark {
+    background-color: hsl(var(--ink));
+    color: hsl(var(--paper));
+    border-color: hsl(var(--ink));
+  }
+  .btn-pill-sm--dark:hover {
+    background-color: #2a2a2a;
+    border-color: #2a2a2a;
+  }
+  .btn-pill-sm--dark:active {
+    background-color: #000;
+    border-color: #000;
+  }
+  .btn-pill-sm--dark:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 
   /* Bordered card (used in lobby, results blocks) */
   .panel {

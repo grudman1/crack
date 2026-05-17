@@ -142,20 +142,23 @@ export default function Multiplayer() {
         Multiplayer
       </h1>
       <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">
-        Play with everyone at the table.
+        Play a round with friends.
       </p>
 
       {!SUPABASE_CONFIGURED && (
-        <div className="mt-6 border border-error/40 p-3 font-sans text-xs text-error">
+        <div className="panel mt-6 p-3 font-sans text-xs text-error">
           Supabase isn&apos;t configured. Set <code>VITE_SUPABASE_URL</code> and{' '}
           <code>VITE_SUPABASE_ANON_KEY</code>, then run the migrations in{' '}
           <code>supabase/migrations/</code>.
         </div>
       )}
 
-      <section className="panel mt-8 p-5">
-        <h2 className="font-serif text-lg font-bold text-ink">Your name</h2>
-        <label className="mt-3 block">
+      {/* Name input lives directly under the headline as the primary
+          setup field, not behind panel chrome. Matches Solo setup's
+          flat hierarchy. */}
+      <div className="mt-8">
+        <label className="block">
+          <span className="font-sans text-xs uppercase tracking-wider text-muted">Your name</span>
           <input
             className="input-line mt-1 font-sans text-base"
             value={name}
@@ -170,9 +173,9 @@ export default function Multiplayer() {
         {nameError && (
           <p className="mt-2 font-sans text-xs text-error">{nameError}</p>
         )}
-      </section>
+      </div>
 
-      <section className="panel mt-4 p-5">
+      <section className="panel mt-6 p-5">
         <h2 className="font-serif text-lg font-bold text-ink">Create a room</h2>
         <p className="mt-1 font-sans text-sm text-muted">You&apos;ll get a 6-letter code to share.</p>
         <button
