@@ -73,42 +73,48 @@ export function InitialsGrid({
               <span className="letter-pair">
                 {alpha} <span aria-hidden>·</span> {round}
               </span>
-              <div className="flex min-w-0 items-baseline gap-3 overflow-hidden">
-                {showResults ? (
-                  <span
-                    className={cn(
-                      'min-w-0 shrink-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-sans text-base text-ink lg:text-[17px]',
-                      invalid && 'text-muted line-through decoration-muted',
-                      unanswered && 'text-empty',
-                    )}
-                  >
-                    {row.name || ' '}
-                  </span>
-                ) : (
-                  <input
-                    ref={(el) => {
-                      refs.current[i] = el;
-                    }}
-                    className={cn(
-                      'input-line min-w-0 flex-1 text-base lg:text-[17px]',
-                      isFocused && 'input-line--active',
-                    )}
-                    value={row.name}
-                    onChange={(e) => onChange?.(i, e.target.value)}
-                    onKeyDown={(e) => handleKey(i, e)}
-                    onFocus={() => setFocused(i)}
-                    onBlur={() => setFocused((f) => (f === i ? null : f))}
-                    disabled={readOnly}
-                    aria-label={`Answer for ${alpha}${round}`}
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                )}
-                {showResults && invalid && row.reason && (
-                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error lg:text-[13px]">
-                    {row.reason}
-                  </span>
-                )}
+              <div className="flex min-w-0 items-center gap-2 overflow-hidden lg:items-baseline lg:gap-3">
+                {/* Inner stack: on mobile the name sits above its
+                    rejection reason so neither has to share the row's
+                    finite width. On lg+ the two render side-by-side
+                    (the original desktop layout). */}
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:flex-row lg:items-baseline lg:gap-3">
+                  {showResults ? (
+                    <span
+                      className={cn(
+                        'min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-sans text-base text-ink lg:shrink-0 lg:text-[17px]',
+                        invalid && 'text-muted line-through decoration-muted',
+                        unanswered && 'text-empty',
+                      )}
+                    >
+                      {row.name || ' '}
+                    </span>
+                  ) : (
+                    <input
+                      ref={(el) => {
+                        refs.current[i] = el;
+                      }}
+                      className={cn(
+                        'input-line min-w-0 flex-1 text-base lg:text-[17px]',
+                        isFocused && 'input-line--active',
+                      )}
+                      value={row.name}
+                      onChange={(e) => onChange?.(i, e.target.value)}
+                      onKeyDown={(e) => handleKey(i, e)}
+                      onFocus={() => setFocused(i)}
+                      onBlur={() => setFocused((f) => (f === i ? null : f))}
+                      disabled={readOnly}
+                      aria-label={`Answer for ${alpha}${round}`}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                  )}
+                  {showResults && invalid && row.reason && (
+                    <span className="min-w-0 overflow-hidden font-sans text-[11px] leading-snug text-error lg:flex-1 lg:overflow-hidden lg:text-ellipsis lg:whitespace-nowrap lg:text-[13px]">
+                      {row.reason}
+                    </span>
+                  )}
+                </div>
                 {/* Review flag: appears on both rejected rows ("I think
                     this should count") and accepted rows ("I think this
                     shouldn't count"). Hidden once the player submits — a
@@ -122,10 +128,13 @@ export function InitialsGrid({
                       Submitted ✓
                     </span>
                   ) : (
+                    // Tap target: 44×44 on mobile (iOS minimum), 24×24
+                    // visual on desktop where hover + pointer accuracy
+                    // make the original size fine.
                     <button
                       type="button"
                       onClick={() => onSubmitForReview(i)}
-                      className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                      className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent lg:mr-0 lg:h-6 lg:w-6"
                       aria-label={`Submit "${row.name}" for review`}
                       title={
                         invalid
@@ -133,7 +142,7 @@ export function InitialsGrid({
                           : "This shouldn't count — submit for review"
                       }
                     >
-                      <HelpCircle className="h-[14px] w-[14px]" strokeWidth={1.75} />
+                      <HelpCircle className="h-4 w-4 lg:h-[14px] lg:w-[14px]" strokeWidth={1.75} />
                     </button>
                   )
                 )}

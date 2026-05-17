@@ -77,8 +77,8 @@ export function ReviewSubmitModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-[420px] !p-6">
-        <DialogTitle className="!text-[22px]">Submit for review</DialogTitle>
+      <DialogContent className="!max-w-[420px] !p-5 lg:!p-6">
+        <DialogTitle className="!text-[22px] pr-8">Submit for review</DialogTitle>
 
         <div className="mt-5 space-y-3">
           <div className="flex items-baseline gap-2">
@@ -105,7 +105,9 @@ export function ReviewSubmitModal({
               onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}
               placeholder="optional — adds context for review"
               rows={3}
-              className="input-line mt-1 w-full resize-none font-sans text-sm"
+              // text-base (16px) on mobile prevents iOS Safari's
+              // auto-zoom-on-focus; lg can drop back to 14 px.
+              className="input-line mt-1 w-full resize-none font-sans text-base lg:text-sm"
               maxLength={MAX_COMMENT}
             />
             <div className="mt-1 flex justify-end">
@@ -122,13 +124,17 @@ export function ReviewSubmitModal({
           <div className="mt-5 flex items-center justify-end gap-2">
             <button
               type="button"
-              className="btn-pill-sm"
+              className="btn-pill-sm !min-h-[2.75rem] !px-4 lg:!min-h-[2rem] lg:!px-3.5"
               onClick={() => onOpenChange(false)}
               disabled={busy}
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary !min-h-[2.5rem] !px-5 !text-sm" disabled={busy}>
+            <button
+              type="submit"
+              className="btn-primary !min-h-[2.75rem] !px-5 !text-sm lg:!min-h-[2.5rem]"
+              disabled={busy}
+            >
               {busy ? 'Submitting…' : 'Submit'}
             </button>
           </div>
