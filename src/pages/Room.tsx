@@ -17,10 +17,12 @@ import {
   upsertSubmission,
   castVote,
 } from '@/services/roomService';
-import { generateRoundLetters, ALPHABET } from '@/services/sentenceService';
+import { ALPHABET } from '@/services/sentenceService';
+import { generateRound, findPhraseByLetters, type Phrase } from '@/services/phraseService';
 import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
 import { PhaseBanner } from '@/components/PhaseBanner';
+import { PhraseHeader } from '@/components/PhraseHeader';
 import { ExportButtons } from '@/components/ExportButtons';
 import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
@@ -43,6 +45,32 @@ export default function Room() {
   const isHost = !!user && !!room && room.host_id === user.id;
 
   const myGridRows: GridRow[] = useMemo(() => answers.map((name) => ({ name })), [answers]);
+
+  // The room's `sentence` column stores a JSON-serialized Phrase. Old rooms
+  // (pre-phrase feature) just have plain text — parse defensively and fall
+  // back to looking up the phrase by letters.
+  const roomPhrase: Phrase | null = useMemo(() => {
+    if (!room) return null;
+    const raw = room.sentence;
+    if (raw && raw.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(raw) as Partial<Phrase>;
+        if (parsed && typeof parsed.text === 'string' && typeof parsed.wikipediaUrl === 'string') {
+          return {
+            text: parsed.text,
+            source: parsed.source ?? '',
+            sourceType: (parsed.sourceType ?? 'idiom') as Phrase['sourceType'],
+            wikipediaUrl: parsed.wikipediaUrl,
+            letters: parsed.letters ?? '',
+          };
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+    if (room.letters_26) return findPhraseByLetters(room.letters_26.toLowerCase());
+    return null;
+  }, [room]);
 
   useEffect(() => {
     if (room && user) void joinRoom(room.id, user.id).catch(() => {});
@@ -133,8 +161,11 @@ export default function Room() {
   const handleStart = async () => {
     if (!isHost || !room) return;
     try {
-      const r = generateRoundLetters();
-      await setRoomPhase(room.id, 'playing', { sentence: r.sentence, letters_26: r.letters });
+      const r = generateRound();
+      await setRoomPhase(room.id, 'playing', {
+        sentence: JSON.stringify(r.phrase),
+        letters_26: r.letters,
+      });
     } catch (e) {
       toast.error(sanitizeError(e));
     }
@@ -153,8 +184,8 @@ export default function Room() {
   const handleNewRound = async () => {
     if (!isHost || !room) return;
     try {
-      const r = generateRoundLetters();
-      await resetRoomForNewRound(room.id, r.sentence, r.letters, room.timer_seconds);
+      const r = generateRound();
+      await resetRoomForNewRound(room.id, JSON.stringify(r.phrase), r.letters, room.timer_seconds);
       setAnswers(Array(26).fill(''));
     } catch (e) {
       toast.error(sanitizeError(e));
@@ -242,6 +273,7 @@ export default function Room() {
   if (room.phase === 'playing') {
     return (
       <div className="frame">
+        {roomPhrase && <PhraseHeader phrase={roomPhrase} className="mb-6" />}
         <div className="flex items-baseline justify-between">
           <PhaseBanner phase="Round" />
           <button type="button" className="btn-ghost text-xs" onClick={handleSaveProgress}>
@@ -262,6 +294,7 @@ export default function Room() {
     return (
       <ValidatingView
         letters={room.letters_26 ?? ''}
+        phrase={roomPhrase}
         submissions={submissions}
         votes={votes}
         userId={user.id}
@@ -275,7 +308,7 @@ export default function Room() {
   return (
     <ResultsView
       letters={room.letters_26 ?? ''}
-      sentence={room.sentence ?? ''}
+      phrase={roomPhrase}
       submissions={submissions}
       players={players}
       scores={scores}
@@ -288,6 +321,7 @@ export default function Room() {
 
 function ValidatingView({
   letters,
+  phrase,
   submissions,
   votes,
   userId,
@@ -296,6 +330,7 @@ function ValidatingView({
   onCompute,
 }: {
   letters: string;
+  phrase: Phrase | null;
   submissions: ReturnType<typeof useSubmissions>;
   votes: ReturnType<typeof useVotes>;
   userId: string;
@@ -323,6 +358,7 @@ function ValidatingView({
 
   return (
     <div className="frame">
+      {phrase && <PhraseHeader phrase={phrase} className="mb-6" />}
       <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Validating" />
         {isHost && (
@@ -388,7 +424,7 @@ function ValidatingView({
 
 function ResultsView({
   letters,
-  sentence,
+  phrase,
   submissions,
   players,
   scores,
@@ -397,7 +433,7 @@ function ResultsView({
   onNewRound,
 }: {
   letters: string;
-  sentence: string;
+  phrase: Phrase | null;
   submissions: ReturnType<typeof useSubmissions>;
   players: ReturnType<typeof useRoomPlayers>;
   scores: ReturnType<typeof useScores>;
@@ -416,6 +452,7 @@ function ResultsView({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2 }}
     >
+      {phrase && <PhraseHeader phrase={phrase} className="mb-6" />}
       <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Results" />
         {isHost && (
@@ -472,7 +509,7 @@ function ResultsView({
         <ExportButtons
           payload={{
             title: 'Crack Multiplayer · my results',
-            sentence,
+            sentence: phrase?.text ?? '',
             letters,
             totalScore: me?.total,
             rows: Array.from({ length: 26 }, (_, i) => {

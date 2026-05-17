@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
-import { ALPHABET, generateRoundLetters } from '@/services/sentenceService';
+import { ALPHABET } from '@/services/sentenceService';
+import { generateRound, type Round } from '@/services/phraseService';
 import { validateName, computeNameInitials } from '@/services/wikiValidationService';
 import { playBeep, playChime, resumeAudio } from '@/services/audioService';
 import { InitialsGrid, type GridRow, type RowStatus } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
 import { PhaseBanner } from '@/components/PhaseBanner';
+import { PhraseHeader } from '@/components/PhraseHeader';
 import { SuggestionsPanel } from '@/components/SuggestionsPanel';
 import { ExportButtons } from '@/components/ExportButtons';
 import { sanitizeError } from '@/lib/sanitizeError';
@@ -37,7 +39,7 @@ export default function Solo() {
   const [phase, setPhase] = useState<SoloPhase>('setup');
   const [totalSeconds, setTotalSeconds] = useState(180);
   const [remaining, setRemaining] = useState(180);
-  const [round, setRound] = useState<{ sentence: string; letters: string } | null>(null);
+  const [round, setRound] = useState<Round | null>(null);
   const [rows, setRows] = useState<AnswerRow[]>(emptyRows);
   const [validationProgress, setValidationProgress] = useState(0);
   const tickRef = useRef<number | null>(null);
@@ -113,7 +115,7 @@ export default function Solo() {
 
   const start = () => {
     resumeAudio();
-    const r = generateRoundLetters();
+    const r = generateRound();
     setRound(r);
     setRows(emptyRows());
     setRemaining(totalSeconds);
@@ -194,6 +196,7 @@ export default function Solo() {
     const checked = Math.min(26, Math.round(validationProgress / (100 / 26)));
     return (
       <div className="frame">
+        {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
         <PhaseBanner phase="Validating" />
         <div className="mt-2 flex items-baseline justify-between font-serif">
           <span className="text-lg font-bold tabular-nums">{checked} / 26</span>
@@ -218,6 +221,7 @@ export default function Solo() {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
       >
+        {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
         <div className="flex items-baseline justify-between">
           <div>
             <PhaseBanner phase="Results" />
@@ -241,7 +245,7 @@ export default function Solo() {
           <ExportButtons
             payload={{
               title: `Crack Solo · ${new Date().toLocaleDateString()}`,
-              sentence: round?.sentence ?? '',
+              sentence: round?.phrase.text ?? '',
               letters: round?.letters ?? '',
               totalScore,
               rows: rows.map((r, i) => ({
@@ -266,6 +270,7 @@ export default function Solo() {
   // ---- Playing ----
   return (
     <div className="frame">
+      {round && <PhraseHeader phrase={round.phrase} className="mb-6" />}
       <div className="flex items-baseline justify-between">
         <PhaseBanner phase="Round" />
         <button
