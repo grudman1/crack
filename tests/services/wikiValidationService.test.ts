@@ -76,6 +76,73 @@ describe('validator URL encoding', () => {
     expect(summaryCalls.some((u) => u.includes('Robin%20Thicke'))).toBe(true);
   });
 
+  it('lowercase typed input no longer poisons the iterate stage via summaryCache', async () => {
+    // Regression for the case-collision cache bug. Wikipedia REST is
+    // case-sensitive on URL paths, so /page/summary/robin%20thicke is
+    // 404 while /page/summary/Robin%20Thicke is 200. The summary
+    // cache used to key by lowercased title, which meant the exact
+    // stage's 404 (cached as null under "robin thicke") would
+    // short-circuit a perfectly valid opensearch-iterate fetch for
+    // "Robin Thicke" — both lookups hashed to the same key. After
+    // the fix, the iterate stage hits the live API and resolves.
+    clearValidationCache();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      // Lowercase exact lookup → 404.
+      if (url.includes('/page/summary/robin%20thicke')) {
+        return new Response(null, { status: 404 });
+      }
+      // Capitalized canonical → 200 with a real summary.
+      if (url.includes('/page/summary/Robin%20Thicke')) {
+        return new Response(
+          JSON.stringify({
+            title: 'Robin Thicke',
+            type: 'standard',
+            extract:
+              'Robin Charles Thicke (born March 10, 1977) is an American singer and songwriter.',
+            wikibase_item: 'Q467423',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      // Opensearch surfaces the canonical title as the top hit.
+      if (url.includes('action=opensearch')) {
+        return new Response(
+          JSON.stringify([
+            'robin thicke',
+            ['Robin Thicke', 'Robin Thicke discography'],
+            ['', ''],
+            ['', ''],
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      // Wikidata says Q467423 is a human.
+      if (url.includes('EntityData/Q467423')) {
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q467423: {
+                claims: {
+                  P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }],
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    const result = await validateName('robin thicke', {
+      expectedInitials: 'RT',
+      bypassCache: true,
+    });
+    expect(result.status).toBe('valid');
+    expect(result.canonicalName).toBe('Robin Thicke');
+  });
+
   it('opensearch URL encodes the query string', async () => {
     const calls: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {

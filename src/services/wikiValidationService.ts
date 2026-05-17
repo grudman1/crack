@@ -383,8 +383,14 @@ function makeHeaders(base: Record<string, string> = {}): Record<string, string> 
 }
 
 async function getSummary(title: string): Promise<WikiSummary | null> {
-  const key = title.toLowerCase();
-  if (summaryCache.has(key)) return summaryCache.get(key) ?? null;
+  // CASE-SENSITIVE KEY — Wikipedia REST treats /page/summary/{title}
+  // case-sensitively on the URL path, so "robin thicke" (404) and
+  // "Robin Thicke" (200) are distinct requests that must NOT share
+  // a cache entry. A lowercased-key collapse poisoned the
+  // opensearch iterate stage: a lowercase exact-stage 404 returned
+  // a cached null when iterate later looked up the properly-cased
+  // canonical title.
+  if (summaryCache.has(title)) return summaryCache.get(title) ?? null;
   let result: WikiSummary | null = null;
   try {
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
@@ -393,8 +399,12 @@ async function getSummary(title: string): Promise<WikiSummary | null> {
   } catch {
     result = null;
   }
-  summaryCache.set(key, result);
-  if (result?.title) summaryCache.set(result.title.toLowerCase(), result);
+  summaryCache.set(title, result);
+  // Also cache under the post-redirect canonical title so a later
+  // request for that exact-case title reuses the same article.
+  if (result?.title && result.title !== title) {
+    summaryCache.set(result.title, result);
+  }
   return result;
 }
 
