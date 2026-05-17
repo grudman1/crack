@@ -236,6 +236,46 @@ function surnamesSimilar(typed: string, candidate: string, maxLev = 2): boolean 
   return metaphonesShare(doubleMetaphone(a), doubleMetaphone(b));
 }
 
+// Build the set of plausible canonical-side surnames for a Wikipedia
+// title. Used by the chain stages that match opensearch / disambig /
+// prefix-connector candidates so a typed surname can be validated
+// against the right slot, not the literal last token of a noble or
+// prefix-style title.
+//
+//   "Prince Harry, Duke of Sussex" → [Sussex, Harry]   (noble strip)
+//   "Queen Noor of Jordan"         → [Jordan, Noor]    ("of" strip)
+//   "Robert De Niro"                → [Niro]            (no strips)
+//
+// We only strip " of <X>" — wider connectors (van/von/de/etc.) are
+// frequent legitimate name particles, so widening risks false positives.
+function canonicalSurnameCandidates(title: string): string[] {
+  const out: string[] = [];
+  const add = (s: string) => {
+    const last = firstAndLast(s).last;
+    if (last) out.push(last);
+  };
+  add(title);
+  const nobleStripped = stripCanonicalNobleSuffix(title);
+  if (nobleStripped !== title) add(nobleStripped);
+  const ofStripped = title.replace(/\s+of\s+.+$/i, '');
+  if (ofStripped !== title) add(ofStripped);
+  return Array.from(new Set(out));
+}
+
+/** Whether the typed name's surname is plausibly the same as the
+ *  canonical's. Lev ≤ 2 OR phonetic match (matches the local fast-path
+ *  threshold). When the typed input has fewer than 2 tokens we can't
+ *  constrain — return true so the caller doesn't double-gate.
+ */
+function surnameMatchesCanonical(typed: string, canonical: string): boolean {
+  const typedLast = firstAndLast(typed).last;
+  if (!typedLast) return true;
+  for (const cLast of canonicalSurnameCandidates(canonical)) {
+    if (surnamesSimilar(typedLast, cLast, 2)) return true;
+  }
+  return false;
+}
+
 // Strict local-entry match: full-name fuzzy OR (first exact + surname fuzzy).
 // This is the fast-path. Cheap and conservative — false positives here would
 // pin the wrong canonical name, so we'd rather miss locally and fall back to
@@ -675,6 +715,24 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
   for (const hitTitle of hits.slice(0, 3)) {
     if (!isPrefixWithConnector(name, hitTitle)) continue;
     if (!wordLengthRatioOK(name, hitTitle)) continue;
+    // The prefix structure guarantees the typed surname appears as a
+    // token in the canonical, but it doesn't guarantee the typed
+    // surname is the right slot. surnameMatchesCanonical compares
+    // against both the raw last token AND the "<X> of Y"-stripped
+    // last token, so "Queen Noor" → "Queen Noor of Jordan" still
+    // matches (Noor passes against the stripped prefix surname) while
+    // an unrelated prefix collision would fail.
+    if (!surnameMatchesCanonical(name, hitTitle)) {
+      const typedLast = firstAndLast(name).last;
+      const canonLast = firstAndLast(hitTitle).last;
+      trace?.({
+        stage: 'prefix-connector',
+        label: 'Prefix-with-connector',
+        outcome: 'miss',
+        note: `"${hitTitle}" — prefix ✓, ratio ✓, but surname '${typedLast}' not similar to '${canonLast}'`,
+      });
+      continue;
+    }
     const sum = await getSummary(hitTitle);
     if (!sum || sum.type === 'disambiguation') {
       trace?.({
@@ -712,6 +770,11 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       if (evaluated >= 25) break;
       if (!canonicalInitialsCandidates(linkTitle).includes(targetInitials)) continue;
       if (!wordLengthRatioOK(name, linkTitle)) continue;
+      // Disambig links share initials by construction, so the surname
+      // gate is the main way to reject "Chris Evans" → wrong-Chris-Evans
+      // style collisions. Failure is silent here (no per-link trace) —
+      // the loop already emits a summary miss when nothing matched.
+      if (!surnameMatchesCanonical(name, linkTitle)) continue;
       const sum = await getSummary(linkTitle);
       if (!sum || sum.type === 'disambiguation') continue;
       evaluated += 1;
@@ -752,6 +815,22 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
         label: 'Opensearch iterate',
         outcome: 'miss',
         note: `"${hitTitle}" — initials match but length ratio < 0.7`,
+      });
+      continue;
+    }
+    // Surname-similarity gate. The hard chain (exact-title) didn't
+    // match — opensearch will surface anything with similar tokens,
+    // so we have to make sure the typed surname is actually close to
+    // the canonical's before accepting (initials + ratio alone allow
+    // "dan newton" → "Dan Newhouse" style false positives).
+    if (!surnameMatchesCanonical(name, hitTitle)) {
+      const typedLast = firstAndLast(name).last;
+      const canonLast = firstAndLast(hitTitle).last;
+      trace?.({
+        stage: 'opensearch',
+        label: 'Opensearch iterate',
+        outcome: 'miss',
+        note: `"${hitTitle}" — initials ✓, ratio ✓, but surname '${typedLast}' not similar to '${canonLast}'`,
       });
       continue;
     }

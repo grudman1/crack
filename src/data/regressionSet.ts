@@ -28,6 +28,8 @@ export const ACCEPT_CASES: RegressionCase[] = [
   { name: 'George Orwell', pair: 'GO', expect: 'accept' },
   { name: 'John F. Kennedy', pair: 'JK', expect: 'accept' },
   { name: 'JFK', pair: 'JK', expect: 'accept', note: 'abbreviation; should resolve via redirect' },
+  { name: 'Dan Newhouse', pair: 'DN', expect: 'accept', note: 'US congressman; exact match should work' },
+  { name: 'Elizabeth Ann Seton', pair: 'ES', expect: 'accept', note: 'Catholic saint; surname Seton is unique' },
 ];
 
 export const REJECT_CASES: RegressionCase[] = [
@@ -40,6 +42,14 @@ export const REJECT_CASES: RegressionCase[] = [
   { name: 'LT', pair: 'LT', expect: 'reject', note: 'no full name' },
   { name: 'Prince', pair: 'PR', expect: 'reject', note: 'mononym — expected to fail token gate' },
   { name: '', pair: 'AA', expect: 'reject', note: 'empty input' },
+  { name: 'Elizabeth Anne', pair: 'EA', expect: 'reject', note: 'two first names; opensearch surname-stretch — was accepting as Elizabeth Anne Allen' },
+  // Known failure: Frank Corsaro is a real Wikipedia-documented opera
+  // director (Q-tagged human). Lev('corsair', 'corsaro') = 2, at the
+  // edge of the surname-similarity threshold we use everywhere. Catching
+  // this would require either tightening to Lev ≤ 1 (over-rejects 2-char
+  // typos elsewhere) or a fame floor (separate work). Left in to keep
+  // the case visible.
+  { name: 'Frank Corsair', pair: 'FC', expect: 'reject', note: 'known failure — Frank Corsaro is a real obscure person, Lev=2 within threshold' },
 ];
 
 export const ALL_CASES: RegressionCase[] = [...ACCEPT_CASES, ...REJECT_CASES];
