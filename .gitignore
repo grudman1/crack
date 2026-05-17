@@ -31,3 +31,6 @@ __pycache__/
 # Regression runner artifacts (regenerated each run)
 regression-report.md
 regression.log
+
+# repomix bundles (not source of truth)
+repomix-output.xml
