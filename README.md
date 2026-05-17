@@ -103,6 +103,13 @@ Non-admins (including signed-out users) get redirected to `/`.
 
 NYT Games-family aesthetic: warm white background (`#fbf8ed`), Georgia serif headlines, Helvetica body, pill-shaped primary buttons, hairline borders, no shadows or glow. The accent is orange `#e8743b` (a single highlight color for letter pairs, share-grid wins, and active state). Success is muted green `#6aaa64`; error is muted red. Design tokens live in `src/index.css` `:root`. Utility classes: `.frame` (page-width container), `.btn-primary` / `.btn-pill-sm` (button system), `.input-line` (text inputs), `.viewport-center` (safe-area vertical centering).
 
+**Audio + haptics.** Solo has two feedback surfaces, both routed through `src/services/audioService.ts`:
+
+- `playKeystroke()` — fires on every typed character. Haptic-only (`navigator.vibrate(8)`), no audio. iOS Safari has no `vibrate`, so it's a no-op there.
+- `playChime()` — end-of-round C-E-G arpeggio.
+
+Both respect a single mute toggle stored in `localStorage['crack:audio-pref']` (`'on'` default, `'off'` silences both). The toggle ("Sound & haptics") lives in the hamburger menu. `resumeAudio()` is still required from a user gesture (called from `start()` in `Solo.tsx`) to unlock the AudioContext.
+
 ## Deploying to Vercel
 
 1. Push the repo to GitHub.

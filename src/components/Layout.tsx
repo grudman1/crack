@@ -1,17 +1,24 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HelpCircle, Menu, X } from 'lucide-react';
 import { AuthModal } from './AuthModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useAuth } from '@/hooks/useAuth';
 import { useAdmin } from '@/hooks/useAdmin';
+import { isMuted, setMuted, subscribeMuted } from '@/services/audioService';
 
 export function Layout() {
   const { user, signOut } = useAuth();
   const { isAdmin } = useAdmin();
   const [authOpen, setAuthOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => !isMuted());
   const { pathname } = useLocation();
+
+  // Stay in sync with any other surface that might flip the mute pref
+  // (none today, but the subscription is cheap and future-proofs the
+  // toggle if Solo setup grows its own affordance).
+  useEffect(() => subscribeMuted(() => setSoundOn(!isMuted())), []);
 
   // Landing page hides the header entirely — the wordmark on the page
   // serves as the brand mark there. Every other route gets the sticky
@@ -74,6 +81,15 @@ export function Layout() {
                   </NavLink>
                 ))}
                 <div className="my-1 h-px bg-hairline" />
+                <button
+                  type="button"
+                  className="flex items-center justify-between py-3 text-left font-sans text-base text-ink hover:opacity-70"
+                  onClick={() => setMuted(soundOn)}
+                  aria-pressed={!soundOn}
+                >
+                  <span>Sound &amp; haptics</span>
+                  <span className="font-sans text-sm text-muted">{soundOn ? 'On' : 'Off'}</span>
+                </button>
                 {user ? (
                   <button
                     type="button"

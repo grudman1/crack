@@ -12,7 +12,7 @@ import {
   computeNameInitials,
   type TraceRecord,
 } from '@/services/wikiValidationService';
-import { playBeep, playChime, resumeAudio } from '@/services/audioService';
+import { playKeystroke, playChime, resumeAudio } from '@/services/audioService';
 import { getRoundNumber, incrementRoundNumber } from '@/services/roundCounter';
 import type { GridRow, RowStatus } from '@/components/InitialsGrid';
 import { ReviewSubmitModal } from '@/components/ReviewSubmitModal';
@@ -176,7 +176,7 @@ export default function Solo() {
   const handleChange = (i: number, value: string) => {
     const prev = rows[i]?.name ?? '';
     if (value.length > prev.length) {
-      playBeep(800 - i * 6);
+      playKeystroke();
     }
     setRows((curr) => {
       const next = curr.slice();
