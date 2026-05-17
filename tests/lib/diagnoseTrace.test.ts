@@ -127,4 +127,84 @@ describe('diagnoseTrace', () => {
     expect(d.likelyCause).toBe('unknown');
     expect(d.suggestedAction).toBe('fix_validator');
   });
+
+  it('rule 9 — accepted via exact on weak signal (no wikibase_item)', () => {
+    const trace: TraceRecord[] = [
+      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
+      { stage: 'local', label: 'Local fast-path', outcome: 'miss', note: 'no match' },
+      {
+        stage: 'exact',
+        label: 'Wikipedia exact-title',
+        outcome: 'hit',
+        note: '"Some Place" — initials AB ✓, length ratio ✓, person ✓',
+        detail: { canonical: 'Some Place' }, // intentionally no wikibase_item
+      },
+      { stage: 'final', label: 'Accept', outcome: 'info', note: 'canonical: Some Place' },
+    ];
+    const d = diagnoseTrace(trace);
+    expect(d.suggestedAction).toBe('fix_validator');
+    expect(d.suspectedStage).toBe('exact');
+    expect(d.hint.toLowerCase()).toContain('weak signal');
+  });
+
+  it('rule 9 does NOT fire when wikibase_item is present', () => {
+    const trace: TraceRecord[] = [
+      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
+      {
+        stage: 'exact',
+        label: 'Wikipedia exact-title',
+        outcome: 'hit',
+        note: '"Real Person" — initials AB ✓, length ratio ✓, person ✓',
+        detail: { canonical: 'Real Person', wikibase_item: 'Q12345' },
+      },
+      { stage: 'final', label: 'Accept', outcome: 'info', note: 'canonical: Real Person' },
+    ];
+    const d = diagnoseTrace(trace);
+    // Falls through to fallback since no acceptance rule matches with a Q-ID present.
+    expect(d.hint.toLowerCase()).not.toContain('weak signal');
+  });
+
+  it('rule 10 — accepted via opensearch iterate', () => {
+    const trace: TraceRecord[] = [
+      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
+      { stage: 'local', label: 'Local fast-path', outcome: 'miss', note: 'no match' },
+      { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '3 hits',
+        detail: { hits: ['Foo', 'Bar', 'Baz'] },
+      },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch iterate',
+        outcome: 'hit',
+        note: '"Bar" — initials ✓, ratio ✓, person ✓',
+        detail: { canonical: 'Bar' },
+      },
+      { stage: 'final', label: 'Accept', outcome: 'info', note: 'canonical: Bar' },
+    ];
+    const d = diagnoseTrace(trace);
+    expect(d.suggestedAction).toBe('fix_validator');
+    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.hint.toLowerCase()).toContain('prominence');
+  });
+
+  it('rule 11 — accepted via local fast-path (bad FAMOUS_PEOPLE entry)', () => {
+    const trace: TraceRecord[] = [
+      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
+      {
+        stage: 'local',
+        label: 'Local fast-path',
+        outcome: 'hit',
+        note: 'matched FAMOUS_PEOPLE[AB] entry "Alec Baldwin"',
+        detail: { canonical: 'Alec Baldwin', pool: 5 },
+      },
+      { stage: 'final', label: 'Accept', outcome: 'info', note: 'canonical: Alec Baldwin' },
+    ];
+    const d = diagnoseTrace(trace);
+    expect(d.suggestedAction).toBe('remove_from_dataset');
+    expect(d.suspectedStage).toBe('local');
+  });
 });

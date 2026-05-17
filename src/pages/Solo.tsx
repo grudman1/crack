@@ -138,6 +138,8 @@ export default function Solo() {
             ],
           };
         } else {
+          // Capture the trace for every API-backed validation, accept
+          // or reject — symmetric "?" flag needs it on valid rows too.
           const trace: TraceRecord[] = [];
           try {
             const result = await validateName(name, {
@@ -150,6 +152,7 @@ export default function Solo() {
                 status: 'valid',
                 canonicalName: result.canonicalName,
                 points: 10,
+                trace,
               };
             } else {
               next[i] = { ...next[i]!, status: 'invalid', reason: result.reason, points: 0, trace };
@@ -210,11 +213,13 @@ export default function Solo() {
   );
 
   // Map the global submitted-keys set into per-row-index booleans for
-  // the current round's rows.
+  // the current round's rows. Both accepted and rejected rows can be
+  // flagged, so we check both statuses.
   const submittedRowIndexes = useMemo(() => {
     const out = new Set<number>();
     rows.forEach((r, i) => {
-      if (!round || !r.name || r.status !== 'invalid') return;
+      if (!round || !r.name) return;
+      if (r.status !== 'invalid' && r.status !== 'valid') return;
       const expected = `${ALPHABET[i]}${round.letters[i] ?? ''}`;
       if (submittedKeys.has(submittedKey(r.name, expected))) out.add(i);
     });
@@ -226,7 +231,17 @@ export default function Solo() {
     const r = rows[reviewModalRow];
     if (!r) return null;
     const pair = `${ALPHABET[reviewModalRow]}${round.letters[reviewModalRow] ?? ''}`;
-    return { name: r.name, expectedPair: pair, reason: r.reason ?? null, trace: r.trace ?? [] };
+    const isAccepted = r.status === 'valid';
+    return {
+      name: r.name,
+      expectedPair: pair,
+      actualResult: (isAccepted ? 'valid' : 'invalid') as 'valid' | 'invalid',
+      // For accepted rows, show the canonical name as the "result"
+      // (what Wikipedia matched to) so the reviewer can spot a
+      // wrong-but-confident match. For rejected rows, show the reason.
+      reason: isAccepted ? r.canonicalName ?? r.name : r.reason ?? null,
+      trace: r.trace ?? [],
+    };
   }, [reviewModalRow, round, rows]);
 
   const handleSubmitted = useCallback(() => {

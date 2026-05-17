@@ -109,7 +109,11 @@ export function InitialsGrid({
                     {row.reason}
                   </span>
                 )}
-                {showResults && invalid && row.reason && row.name && onSubmitForReview && (
+                {/* Review flag: appears on both rejected rows ("I think
+                    this should count") and accepted rows ("I think this
+                    shouldn't count"). Hidden once the player submits — a
+                    muted badge takes its place to prevent re-submits. */}
+                {showResults && row.name && onSubmitForReview && (valid || (invalid && row.reason)) && (
                   submittedReviewIndexes?.has(i) ? (
                     <span
                       className="shrink-0 font-sans text-[10px] uppercase tracking-wider text-muted"
@@ -123,7 +127,11 @@ export function InitialsGrid({
                       onClick={() => onSubmitForReview(i)}
                       className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-hairline/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
                       aria-label={`Submit "${row.name}" for review`}
-                      title="This should count — submit for review"
+                      title={
+                        invalid
+                          ? 'This should count — submit for review'
+                          : "This shouldn't count — submit for review"
+                      }
                     >
                       <HelpCircle className="h-[14px] w-[14px]" strokeWidth={1.75} />
                     </button>

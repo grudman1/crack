@@ -13,7 +13,7 @@ export interface TraceDiagnosis {
   likelyCause: 'validator_bug' | 'wikipedia_ambiguity' | 'unknown';
   hint: string;
   suspectedStage?: TraceRecord['stage'];
-  suggestedAction: 'fix_validator' | 'add_to_dataset';
+  suggestedAction: 'fix_validator' | 'add_to_dataset' | 'remove_from_dataset';
 }
 
 function findStage(trace: TraceRecord[], stage: TraceRecord['stage']): TraceRecord[] {
@@ -152,6 +152,68 @@ export function diagnoseTrace(trace: TraceRecord[]): TraceDiagnosis {
       suspectedStage: 'gate',
       suggestedAction: 'add_to_dataset',
     };
+  }
+
+  // The remaining rules cover ACCEPTANCE traces — the reviewer flagged
+  // a row that the chain validated as a real person but they think
+  // shouldn't have counted. These never match a trace that ended in
+  // rejection, so order vs. rules 1-7 above is moot.
+  const wasAccepted = trace.some(
+    (r) => r.stage === 'final' && /^accept/i.test(r.label),
+  );
+
+  if (wasAccepted) {
+    // --- 9. Accepted via the exact stage but on a thin signal —
+    //         specifically, person ✓ but no wikibase_item in the detail
+    //         payload. Wikidata didn't tag the article with Q5, so we
+    //         must have leaned on the extract-text heuristic in
+    //         isPerson(). Likely a false positive (notable place,
+    //         organization, fictional thing, etc.).
+    const exactHit = exactRows.find((r) => r.outcome === 'hit');
+    if (exactHit) {
+      const wbid = (exactHit.detail as Record<string, unknown> | undefined)?.['wikibase_item'];
+      const hasWikibaseId = typeof wbid === 'string' && wbid.length > 0;
+      if (!hasWikibaseId) {
+        return {
+          likelyCause: 'validator_bug',
+          hint: 'Person-check accepted on a weak signal (no Wikidata Q5 — fell back to extract heuristics). Tighten isPerson() so heuristic-only acceptances require a stronger biographical opener.',
+          suspectedStage: 'exact',
+          suggestedAction: 'fix_validator',
+        };
+      }
+    }
+
+    // --- 10. Accepted via opensearch iteration. The hard chain
+    //          (exact-title) didn't match, so we fell back to fuzzy
+    //          search. If the reviewer flagged this as wrong, the
+    //          matched article is probably a niche figure whose name
+    //          collides with the typed one — needs a prominence floor
+    //          (pageviews, Q-rank, etc.) rather than first-eligible-hit.
+    const opensearchHit = findStage(trace, 'opensearch').find(
+      (r) => r.outcome === 'hit' && r.label.toLowerCase().includes('iterate'),
+    );
+    if (opensearchHit) {
+      return {
+        likelyCause: 'validator_bug',
+        hint: 'Opensearch iterate matched a candidate the chain considered eligible, but the reviewer disagrees. Consider raising the prominence threshold or surfacing top pageviews/Q-rank before iterating.',
+        suspectedStage: 'opensearch',
+        suggestedAction: 'fix_validator',
+      };
+    }
+
+    // --- 11. Accepted via the local fast-path (FAMOUS_PEOPLE). The
+    //          chain never reached Wikipedia — the entry is curated
+    //          local data. If the reviewer says this is wrong, the
+    //          entry itself is the problem; suggest deletion.
+    const localHit = findStage(trace, 'local').find((r) => r.outcome === 'hit');
+    if (localHit) {
+      return {
+        likelyCause: 'unknown',
+        hint: 'Bad entry in FAMOUS_PEOPLE — the local fast-path matched this name without consulting Wikipedia. Remove or correct the entry.',
+        suspectedStage: 'local',
+        suggestedAction: 'remove_from_dataset',
+      };
+    }
   }
 
   // --- 8. Fallback.

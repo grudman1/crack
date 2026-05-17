@@ -13,9 +13,17 @@ import { TraceViewer } from '@/components/TraceViewer';
 import { pairToDot } from '@/lib/traceFormat';
 import { diagnoseTrace, type TraceDiagnosis } from '@/lib/diagnoseTrace';
 import { resolveReview, type Resolution } from '@/services/reviewService';
+import { FAMOUS_PEOPLE } from '@/data/famousPeople';
+import type { Suggestion } from '@/services/soloSuggestions';
 import type { ValidationReviewRow } from '@/types/database';
 
-type ActionKey = 'fix_validator' | 'add_to_dataset' | 'reject' | 'duplicate' | null;
+type ActionKey =
+  | 'fix_validator'
+  | 'add_to_dataset'
+  | 'remove_from_dataset'
+  | 'reject'
+  | 'duplicate'
+  | null;
 
 interface Props {
   review: ValidationReviewRow;
@@ -32,17 +40,63 @@ function timeAgo(iso: string): string {
 }
 
 function regressionSnippet(r: ValidationReviewRow, diag: TraceDiagnosis): string {
+  // For invalid rows the player thinks the validator wrongly rejected,
+  // so the regression assertion is "expect accept." For valid rows
+  // (the symmetric false-positive case), the assertion is "expect
+  // reject" so the case fails when the validator wrongly accepts again.
+  const expect = r.actual_result === 'valid' ? 'reject' : 'accept';
   const noteParts: string[] = [];
   if (diag.suspectedStage) noteParts.push(`stage: ${diag.suspectedStage}`);
   noteParts.push('validator bug surfaced by player feedback');
   const note = noteParts.join(' — ');
-  return `  { name: '${r.name.replace(/'/g, "\\'")}', pair: '${r.expected_pair.toUpperCase()}', expect: 'accept', note: '${note.replace(/'/g, "\\'")}' },`;
+  return `  { name: '${r.name.replace(/'/g, "\\'")}', pair: '${r.expected_pair.toUpperCase()}', expect: '${expect}', note: '${note.replace(/'/g, "\\'")}' },`;
 }
 
 function famousPeopleSnippet(r: ValidationReviewRow): string {
   const pair = r.expected_pair.toUpperCase();
   const safe = r.name.replace(/'/g, "\\'");
   return `// Add to FAMOUS_PEOPLE['${pair}']:\np('${safe}', 'TODO short description'),`;
+}
+
+function formatEntryAsCode(entry: Suggestion): string {
+  const esc = (s: string) => s.replace(/'/g, "\\'");
+  const slugFromName = entry.name.replace(/ /g, '_');
+  const expectedUrl = `https://en.wikipedia.org/wiki/${slugFromName}`;
+  const customSlug = entry.wikipediaUrl && entry.wikipediaUrl !== expectedUrl;
+  const slug = customSlug
+    ? (entry.wikipediaUrl as string).replace('https://en.wikipedia.org/wiki/', '')
+    : null;
+  if (slug) {
+    return `p('${esc(entry.name)}', '${esc(entry.description ?? '')}', '${esc(slug)}'),`;
+  }
+  return `p('${esc(entry.name)}', '${esc(entry.description ?? '')}'),`;
+}
+
+function removeFromDatasetSnippet(r: ValidationReviewRow): string {
+  const pair = r.expected_pair.toUpperCase();
+  const bucket = FAMOUS_PEOPLE[pair] ?? [];
+  // The local-hit trace stamps the exact entry name in detail.canonical,
+  // which is the authoritative match. Fall back to the typed name when
+  // the trace doesn't have it (e.g. valid row matched via a different
+  // stage but reviewer wants the bucket inspected anyway).
+  const localHit = r.trace?.find((t) => t.stage === 'local' && t.outcome === 'hit');
+  const fromDetail = (localHit?.detail as Record<string, unknown> | undefined)?.['canonical'];
+  const targetName =
+    typeof fromDetail === 'string' && fromDetail.length > 0 ? fromDetail : r.name;
+  const lc = (s: string) => s.toLowerCase();
+  const needle = lc(targetName);
+  const match =
+    bucket.find((e) => lc(e.name) === needle) ??
+    bucket.find((e) => lc(e.name).includes(needle)) ??
+    bucket.find((e) => needle.includes(lc(e.name)));
+  if (!match) {
+    return [
+      `// No FAMOUS_PEOPLE['${pair}'] entry found matching "${r.name}".`,
+      '// The chain may have accepted this via the Wikipedia path instead —',
+      '// re-check the trace and consider "Approve — fix validator" instead.',
+    ].join('\n');
+  }
+  return [`// Remove this line from FAMOUS_PEOPLE['${pair}']:`, formatEntryAsCode(match)].join('\n');
 }
 
 function CopyBlock({ label, value }: { label: string; value: string }) {
@@ -81,7 +135,10 @@ export function ReviewQueueItem({ review }: Props) {
 
   const diag = useMemo(() => diagnoseTrace(review.trace ?? []), [review.trace]);
 
-  const submitResolution = async (kind: 'approved' | 'rejected' | 'duplicate', type?: 'fix_validator' | 'add_to_dataset') => {
+  const submitResolution = async (
+    kind: 'approved' | 'rejected' | 'duplicate',
+    type?: 'fix_validator' | 'add_to_dataset' | 'remove_from_dataset',
+  ) => {
     setBusy(true);
     try {
       const resolution: Resolution =
@@ -102,8 +159,19 @@ export function ReviewQueueItem({ review }: Props) {
   const isPending = review.status === 'pending';
   const isApprovedFix = review.status === 'approved' && review.resolution_type === 'fix_validator';
   const isApprovedData = review.status === 'approved' && review.resolution_type === 'add_to_dataset';
+  const isApprovedRemove =
+    review.status === 'approved' && review.resolution_type === 'remove_from_dataset';
   const isRejected = review.status === 'rejected';
   const isDuplicate = review.status === 'duplicate';
+  // The second "approve" button swaps based on the direction the player
+  // flagged. Invalid → add_to_dataset (false negative, curate it in).
+  // Valid → remove_from_dataset (false positive, the dataset is wrong).
+  const secondaryApproveKey: 'add_to_dataset' | 'remove_from_dataset' =
+    review.actual_result === 'valid' ? 'remove_from_dataset' : 'add_to_dataset';
+  const secondaryApproveLabel =
+    secondaryApproveKey === 'add_to_dataset'
+      ? 'Approve — add to dataset'
+      : 'Approve — remove from dataset';
 
   return (
     <li className="border border-hairline bg-paper p-4">
@@ -176,10 +244,10 @@ export function ReviewQueueItem({ review }: Props) {
               </button>
               <button
                 type="button"
-                className={`btn-pill-sm ${diag.suggestedAction === 'add_to_dataset' ? 'btn-ghost--selected' : ''}`}
-                onClick={() => setAction('add_to_dataset')}
+                className={`btn-pill-sm ${diag.suggestedAction === secondaryApproveKey ? 'btn-ghost--selected' : ''}`}
+                onClick={() => setAction(secondaryApproveKey)}
               >
-                Approve — add to dataset
+                {secondaryApproveLabel}
               </button>
               <button type="button" className="btn-pill-sm" onClick={() => setAction('reject')}>
                 Reject
@@ -204,7 +272,9 @@ export function ReviewQueueItem({ review }: Props) {
                       ? 'e.g. title-strip pattern, see exact stage'
                       : action === 'add_to_dataset'
                         ? 'e.g. Wikipedia has no article, curated entry'
-                        : 'optional context'
+                        : action === 'remove_from_dataset'
+                          ? 'e.g. wrong entry — wrong person or not famous enough'
+                          : 'optional context'
                   }
                 />
               </label>
@@ -226,6 +296,8 @@ export function ReviewQueueItem({ review }: Props) {
                   onClick={() => {
                     if (action === 'fix_validator') void submitResolution('approved', 'fix_validator');
                     else if (action === 'add_to_dataset') void submitResolution('approved', 'add_to_dataset');
+                    else if (action === 'remove_from_dataset')
+                      void submitResolution('approved', 'remove_from_dataset');
                     else if (action === 'reject') void submitResolution('rejected');
                     else if (action === 'duplicate') void submitResolution('duplicate');
                   }}
@@ -265,6 +337,9 @@ export function ReviewQueueItem({ review }: Props) {
             </>
           )}
           {isApprovedData && <CopyBlock label="FAMOUS_PEOPLE entry" value={famousPeopleSnippet(review)} />}
+          {isApprovedRemove && (
+            <CopyBlock label="FAMOUS_PEOPLE entry to remove" value={removeFromDatasetSnippet(review)} />
+          )}
           {(isRejected || isDuplicate) && !review.resolution_note && (
             <p className="font-sans text-xs text-muted">No note provided.</p>
           )}
@@ -285,7 +360,9 @@ function StatusTag({
     status === 'approved'
       ? resolutionType === 'fix_validator'
         ? 'approved · fix'
-        : 'approved · data'
+        : resolutionType === 'remove_from_dataset'
+          ? 'approved · remove'
+          : 'approved · data'
       : status;
   const cls =
     status === 'pending'

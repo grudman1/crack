@@ -8,6 +8,10 @@ import type { TraceRecord } from '@/services/wikiValidationService';
 interface ReviewContext {
   name: string;
   expectedPair: string;
+  actualResult: 'valid' | 'invalid';
+  /** For 'invalid' rows: the rejection reason. For 'valid' rows: the
+   *  canonical name Wikipedia matched to (so the player can see what
+   *  the validator thinks they typed). */
   reason?: string | null;
   trace: TraceRecord[];
 }
@@ -49,7 +53,7 @@ export function ReviewSubmitModal({
       await submitReview({
         name: context.name,
         expectedPair: context.expectedPair,
-        actualResult: 'invalid',
+        actualResult: context.actualResult,
         reason: context.reason ?? null,
         trace: context.trace,
         userComment: comment,
@@ -63,6 +67,13 @@ export function ReviewSubmitModal({
       setBusy(false);
     }
   };
+
+  const isAccepted = context.actualResult === 'valid';
+  const resultLabel = isAccepted ? 'Accepted as:' : 'Result:';
+  const promptLabel = isAccepted
+    ? "Why do you think this shouldn't count?"
+    : 'Why do you think this should count?';
+  const resultValueClass = isAccepted ? 'text-success' : 'text-error';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -81,16 +92,14 @@ export function ReviewSubmitModal({
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-sans text-xs uppercase tracking-wider text-muted">Result:</span>
-            <span className="font-sans text-sm text-error">{context.reason || '—'}</span>
+            <span className="font-sans text-xs uppercase tracking-wider text-muted">{resultLabel}</span>
+            <span className={`font-sans text-sm ${resultValueClass}`}>{context.reason || '—'}</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6">
           <label className="block">
-            <span className="font-sans text-xs uppercase tracking-wider text-muted">
-              Why do you think this should count?
-            </span>
+            <span className="font-sans text-xs uppercase tracking-wider text-muted">{promptLabel}</span>
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value.slice(0, MAX_COMMENT))}

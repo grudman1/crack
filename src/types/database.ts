@@ -3,7 +3,11 @@ import type { TraceRecord } from '@/services/wikiValidationService';
 export type Phase = 'lobby' | 'playing' | 'validating' | 'results';
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'duplicate';
-export type ResolutionType = 'fix_validator' | 'add_to_dataset' | null;
+export type ResolutionType =
+  | 'fix_validator'
+  | 'add_to_dataset'
+  | 'remove_from_dataset'
+  | null;
 
 export interface ProfileRow {
   id: string;
