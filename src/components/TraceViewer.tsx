@@ -1,5 +1,6 @@
-// Shared trace renderer used by /debug and the admin queue. Pure
-// presentation — no fetching, no state.
+// Shared trace renderer used by the /admin workbench (Section 1)
+// and queue items (Section 2). Pure presentation — no fetching, no
+// state.
 
 import type { TraceRecord } from '@/services/wikiValidationService';
 import { renderTrace } from '@/lib/traceFormat';

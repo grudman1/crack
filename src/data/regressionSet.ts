@@ -1,6 +1,7 @@
-// Hardcoded regression cases for the /debug page. Easy to extend over
-// time — just add a new entry. Each case runs through the full
-// validation chain; we expect ACCEPTs to pass and REJECTs to fail.
+// Hardcoded regression cases for the /admin workbench (Section 3) and
+// the scripts/runRegression.ts CLI runner. Easy to extend over time —
+// just add a new entry. Each case runs through the full validation
+// chain; we expect ACCEPTs to pass and REJECTs to fail.
 
 export interface RegressionCase {
   name: string;

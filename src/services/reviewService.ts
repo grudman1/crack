@@ -85,3 +85,54 @@ export async function resolveReview(id: string, resolution: Resolution): Promise
     .eq('id', id);
   if (error) throw error;
 }
+
+/** One-shot insert that mirrors what an admin's "submit player
+ *  review → resolve review" round-trip would write, but with both
+ *  operations folded into a single row create. Used by the admin
+ *  workbench: every ad-hoc test the admin acts on becomes a
+ *  permanent record so the queue is a complete history. */
+export type AdhocResolution =
+  | { status: 'approved'; resolutionType: Exclude<ResolutionType, null>; note?: string }
+  | { status: 'rejected'; note?: string }
+  | { status: 'duplicate'; note?: string };
+
+export interface SubmitAndResolveInput {
+  name: string;
+  expectedPair: string;
+  actualResult: 'valid' | 'invalid';
+  reason?: string | null;
+  trace: TraceRecord[];
+  resolution: AdhocResolution;
+}
+
+export async function submitAndResolveReview(input: SubmitAndResolveInput): Promise<string> {
+  const { data: auth } = await supabase.auth.getUser();
+  const reviewerId = auth.user?.id ?? null;
+  const fingerprint = getClientFingerprint();
+  const { resolution } = input;
+
+  const payload = {
+    name: input.name.trim(),
+    expected_pair: input.expectedPair.toUpperCase().slice(0, 2),
+    actual_result: input.actualResult,
+    reason: input.reason ?? null,
+    trace: input.trace,
+    player_id: reviewerId,
+    user_comment: 'self-tested via admin workbench',
+    client_fingerprint: fingerprint,
+    status: resolution.status,
+    resolution_type:
+      resolution.status === 'approved' ? resolution.resolutionType : null,
+    reviewed_by: reviewerId,
+    reviewed_at: new Date().toISOString(),
+    resolution_note: resolution.note?.trim() || null,
+  };
+
+  const { data, error } = await supabase
+    .from('validation_reviews')
+    .insert(payload)
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}

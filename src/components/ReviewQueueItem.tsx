@@ -1,20 +1,36 @@
-// One row in the /admin queue. Owns its own resolution UX:
-// open one of three confirmation rows inline, capture an optional note,
-// call resolveReview() with the right shape. After resolution (or when
-// viewing already-resolved rows) it renders copy-pasteable snippets for
-// the regression set and FAMOUS_PEOPLE so the admin can paste them
-// straight into source.
+// One row in the admin queue. Owns its own resolution UX (one of
+// the four action buttons → inline note input → confirm), plus two
+// callbacks the parent wires to the workbench:
+//
+//   onTestThis(name, pair)   — populate the workbench inputs and
+//                              scroll to it (admin re-tests + tweaks)
+//   onRerunValidation(...)   — re-validate this exact row with the
+//                              cache bypassed (parent supplies the
+//                              hit so all queue items share a single
+//                              validator import). The new result is
+//                              stored locally and overrides the
+//                              displayed trace until the next mount.
 
 import { useMemo, useState } from 'react';
-import { Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, RotateCw } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { TraceViewer } from '@/components/TraceViewer';
+import { CopyBlock } from '@/components/CopyBlock';
 import { pairToDot } from '@/lib/traceFormat';
-import { diagnoseTrace, type TraceDiagnosis } from '@/lib/diagnoseTrace';
+import { diagnoseTrace } from '@/lib/diagnoseTrace';
+import {
+  regressionSnippet,
+  famousPeopleSnippet,
+  removeFromDatasetSnippet,
+} from '@/lib/reviewSnippets';
 import { resolveReview, type Resolution } from '@/services/reviewService';
-import { FAMOUS_PEOPLE } from '@/data/famousPeople';
-import type { Suggestion } from '@/services/soloSuggestions';
+import {
+  validateName,
+  clearValidationCache,
+  type TraceRecord,
+  type ValidationResult,
+} from '@/services/wikiValidationService';
 import type { ValidationReviewRow } from '@/types/database';
 
 type ActionKey =
@@ -27,6 +43,8 @@ type ActionKey =
 
 interface Props {
   review: ValidationReviewRow;
+  /** Parent populates workbench inputs + scrolls to the workbench. */
+  onTestThis?: (name: string, pair: string) => void;
 }
 
 function timeAgo(iso: string): string {
@@ -39,104 +57,49 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-function regressionSnippet(r: ValidationReviewRow, diag: TraceDiagnosis): string {
-  // For invalid rows the player thinks the validator wrongly rejected,
-  // so the regression assertion is "expect accept." For valid rows
-  // (the symmetric false-positive case), the assertion is "expect
-  // reject" so the case fails when the validator wrongly accepts again.
-  const expect = r.actual_result === 'valid' ? 'reject' : 'accept';
-  const noteParts: string[] = [];
-  if (diag.suspectedStage) noteParts.push(`stage: ${diag.suspectedStage}`);
-  noteParts.push('validator bug surfaced by player feedback');
-  const note = noteParts.join(' — ');
-  return `  { name: '${r.name.replace(/'/g, "\\'")}', pair: '${r.expected_pair.toUpperCase()}', expect: '${expect}', note: '${note.replace(/'/g, "\\'")}' },`;
-}
-
-function famousPeopleSnippet(r: ValidationReviewRow): string {
-  const pair = r.expected_pair.toUpperCase();
-  const safe = r.name.replace(/'/g, "\\'");
-  return `// Add to FAMOUS_PEOPLE['${pair}']:\np('${safe}', 'TODO short description'),`;
-}
-
-function formatEntryAsCode(entry: Suggestion): string {
-  const esc = (s: string) => s.replace(/'/g, "\\'");
-  const slugFromName = entry.name.replace(/ /g, '_');
-  const expectedUrl = `https://en.wikipedia.org/wiki/${slugFromName}`;
-  const customSlug = entry.wikipediaUrl && entry.wikipediaUrl !== expectedUrl;
-  const slug = customSlug
-    ? (entry.wikipediaUrl as string).replace('https://en.wikipedia.org/wiki/', '')
-    : null;
-  if (slug) {
-    return `p('${esc(entry.name)}', '${esc(entry.description ?? '')}', '${esc(slug)}'),`;
-  }
-  return `p('${esc(entry.name)}', '${esc(entry.description ?? '')}'),`;
-}
-
-function removeFromDatasetSnippet(r: ValidationReviewRow): string {
-  const pair = r.expected_pair.toUpperCase();
-  const bucket = FAMOUS_PEOPLE[pair] ?? [];
-  // The local-hit trace stamps the exact entry name in detail.canonical,
-  // which is the authoritative match. Fall back to the typed name when
-  // the trace doesn't have it (e.g. valid row matched via a different
-  // stage but reviewer wants the bucket inspected anyway).
-  const localHit = r.trace?.find((t) => t.stage === 'local' && t.outcome === 'hit');
-  const fromDetail = (localHit?.detail as Record<string, unknown> | undefined)?.['canonical'];
-  const targetName =
-    typeof fromDetail === 'string' && fromDetail.length > 0 ? fromDetail : r.name;
-  const lc = (s: string) => s.toLowerCase();
-  const needle = lc(targetName);
-  const match =
-    bucket.find((e) => lc(e.name) === needle) ??
-    bucket.find((e) => lc(e.name).includes(needle)) ??
-    bucket.find((e) => needle.includes(lc(e.name)));
-  if (!match) {
-    return [
-      `// No FAMOUS_PEOPLE['${pair}'] entry found matching "${r.name}".`,
-      '// The chain may have accepted this via the Wikipedia path instead —',
-      '// re-check the trace and consider "Approve — fix validator" instead.',
-    ].join('\n');
-  }
-  return [`// Remove this line from FAMOUS_PEOPLE['${pair}']:`, formatEntryAsCode(match)].join('\n');
-}
-
-function CopyBlock({ label, value }: { label: string; value: string }) {
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(`Copied ${label}.`);
-    } catch {
-      toast.error("Couldn't copy — select the snippet and ⌘C.");
-    }
-  };
-  return (
-    <div className="mt-2">
-      <div className="flex items-center justify-between">
-        <span className="font-sans text-[11px] uppercase tracking-wider text-muted">{label}</span>
-        <button
-          type="button"
-          onClick={copy}
-          className="flex items-center gap-1 font-sans text-[11px] text-muted hover:text-ink"
-        >
-          <Copy className="h-3 w-3" strokeWidth={1.75} /> Copy
-        </button>
-      </div>
-      <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-paper-shadow/40 p-2 font-mono text-[12px] leading-relaxed text-ink">
-        {value}
-      </pre>
-    </div>
-  );
-}
-
-export function ReviewQueueItem({ review }: Props) {
+export function ReviewQueueItem({ review, onTestThis }: Props) {
   const [action, setAction] = useState<ActionKey>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
+  // Re-run state — purely in-memory, never written back to the row.
+  const [revalidated, setRevalidated] = useState<{
+    result: ValidationResult;
+    trace: TraceRecord[];
+  } | null>(null);
+  const [rerunBusy, setRerunBusy] = useState(false);
 
-  const diag = useMemo(
-    () => diagnoseTrace(review.trace ?? [], review.expected_pair),
-    [review.trace, review.expected_pair],
+  // useMemo guards both the trace and the diagnosis so the array
+  // identity is stable across renders that don't actually touch either
+  // input — without this, displayedTrace was `?? []`, which made a
+  // fresh empty array on each render and re-fired the diag memo.
+  const displayedTrace = useMemo(
+    () => revalidated?.trace ?? review.trace ?? [],
+    [revalidated, review.trace],
   );
+  const diag = useMemo(
+    () => diagnoseTrace(displayedTrace, review.expected_pair),
+    [displayedTrace, review.expected_pair],
+  );
+
+  const handleRerun = async () => {
+    setRerunBusy(true);
+    try {
+      const trace: TraceRecord[] = [];
+      clearValidationCache();
+      const result = await validateName(review.name, {
+        expectedInitials: review.expected_pair,
+        trace: (r) => trace.push(r),
+        bypassCache: true,
+      });
+      setRevalidated({ result, trace });
+      setTraceOpen(true);
+    } catch (err) {
+      toast.error(sanitizeError(err));
+    } finally {
+      setRerunBusy(false);
+    }
+  };
 
   const submitResolution = async (
     kind: 'approved' | 'rejected' | 'duplicate',
@@ -166,15 +129,20 @@ export function ReviewQueueItem({ review }: Props) {
     review.status === 'approved' && review.resolution_type === 'remove_from_dataset';
   const isRejected = review.status === 'rejected';
   const isDuplicate = review.status === 'duplicate';
-  // The second "approve" button swaps based on the direction the player
-  // flagged. Invalid → add_to_dataset (false negative, curate it in).
-  // Valid → remove_from_dataset (false positive, the dataset is wrong).
+
   const secondaryApproveKey: 'add_to_dataset' | 'remove_from_dataset' =
     review.actual_result === 'valid' ? 'remove_from_dataset' : 'add_to_dataset';
   const secondaryApproveLabel =
     secondaryApproveKey === 'add_to_dataset'
       ? 'Approve — add to dataset'
       : 'Approve — remove from dataset';
+
+  // "Result changed" badge: after re-run, compare the new verdict to
+  // what the row was originally recorded as.
+  const rerunChangedVerdict =
+    revalidated && revalidated.result.status !== review.actual_result;
+
+  const fmtVerdict = (v: 'valid' | 'invalid') => (v === 'valid' ? 'ACCEPT' : 'REJECT');
 
   return (
     <li className="border border-hairline bg-paper p-4">
@@ -185,6 +153,12 @@ export function ReviewQueueItem({ review }: Props) {
         </span>
         <span className="font-serif text-[18px] font-bold text-ink">{review.name || '(empty)'}</span>
         <StatusTag status={review.status} resolutionType={review.resolution_type} />
+        {rerunChangedVerdict && (
+          <span className="rounded-full bg-accent/10 px-2.5 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-accent">
+            result changed: was {fmtVerdict(review.actual_result)}, now{' '}
+            {fmtVerdict(revalidated!.result.status)}
+          </span>
+        )}
       </div>
       <div className="mt-1 font-sans text-xs text-muted">
         Submitted {timeAgo(review.created_at)} · {review.player_id ? 'authed player' : 'anonymous'}
@@ -202,7 +176,7 @@ export function ReviewQueueItem({ review }: Props) {
         </p>
       )}
 
-      {/* Diagnostic */}
+      {/* Diagnostic — recomputed against the displayed trace, so a re-run updates it. */}
       <div className="mt-3 rounded border border-hairline bg-paper-shadow/30 p-3">
         <div className="font-sans text-[11px] uppercase tracking-wider text-muted">Diagnostic</div>
         <div className="mt-1 font-sans text-sm text-ink">
@@ -217,21 +191,47 @@ export function ReviewQueueItem({ review }: Props) {
           <div className="mt-1">{diag.hint}</div>
           <div className="mt-1">
             <span className="text-muted">Suggested:</span>{' '}
-            {diag.suggestedAction === 'fix_validator' ? 'Fix validator' : 'Add to dataset'}
+            {diag.suggestedAction === 'fix_validator'
+              ? 'Fix validator'
+              : diag.suggestedAction === 'add_to_dataset'
+                ? 'Add to dataset'
+                : 'Remove from dataset'}
           </div>
         </div>
       </div>
 
-      {/* Trace */}
-      <button
-        type="button"
-        onClick={() => setTraceOpen((v) => !v)}
-        className="mt-3 flex items-center gap-1 font-sans text-xs text-muted hover:text-ink"
-      >
-        {traceOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        View trace ({review.trace?.length ?? 0} records)
-      </button>
-      {traceOpen && <TraceViewer trace={review.trace ?? []} className="mt-2" />}
+      {/* Trace + workbench / re-run controls */}
+      <div className="mt-3 flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setTraceOpen((v) => !v)}
+          className="flex items-center gap-1 font-sans text-xs text-muted hover:text-ink"
+        >
+          {traceOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          View trace ({displayedTrace.length} records{revalidated ? ', re-run' : ''})
+        </button>
+        {onTestThis && (
+          <button
+            type="button"
+            onClick={() => onTestThis(review.name, review.expected_pair)}
+            className="flex items-center gap-1 font-sans text-xs text-muted hover:text-ink"
+            title="Open this row in the workbench above"
+          >
+            <ExternalLink className="h-3 w-3" strokeWidth={1.75} /> Test this
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleRerun()}
+          disabled={rerunBusy}
+          className="flex items-center gap-1 font-sans text-xs text-muted hover:text-ink disabled:opacity-50"
+          title="Re-validate this row with the cache bypassed (in-memory only)"
+        >
+          <RotateCw className={`h-3 w-3 ${rerunBusy ? 'animate-spin' : ''}`} strokeWidth={1.75} />
+          {rerunBusy ? 'Re-running…' : 'Re-run validation'}
+        </button>
+      </div>
+      {traceOpen && <TraceViewer trace={displayedTrace} className="mt-2" />}
 
       {/* Actions / post-resolution snippets */}
       {isPending ? (
@@ -324,7 +324,15 @@ export function ReviewQueueItem({ review }: Props) {
           )}
           {isApprovedFix && (
             <>
-              <CopyBlock label="Regression test entry" value={regressionSnippet(review, diag)} />
+              <CopyBlock
+                label="Regression test entry"
+                value={regressionSnippet({
+                  name: review.name,
+                  pair: review.expected_pair,
+                  actualResult: review.actual_result,
+                  suspectedStage: diag.suspectedStage,
+                })}
+              />
               <div className="mt-3 rounded border border-dashed border-hairline bg-paper-shadow/20 p-2">
                 <div className="font-sans text-[11px] uppercase tracking-wider text-muted">
                   Diagnostic context
@@ -339,9 +347,21 @@ export function ReviewQueueItem({ review }: Props) {
               </div>
             </>
           )}
-          {isApprovedData && <CopyBlock label="FAMOUS_PEOPLE entry" value={famousPeopleSnippet(review)} />}
+          {isApprovedData && (
+            <CopyBlock
+              label="FAMOUS_PEOPLE entry"
+              value={famousPeopleSnippet({ name: review.name, pair: review.expected_pair })}
+            />
+          )}
           {isApprovedRemove && (
-            <CopyBlock label="FAMOUS_PEOPLE entry to remove" value={removeFromDatasetSnippet(review)} />
+            <CopyBlock
+              label="FAMOUS_PEOPLE entry to remove"
+              value={removeFromDatasetSnippet({
+                name: review.name,
+                pair: review.expected_pair,
+                trace: review.trace ?? [],
+              })}
+            />
           )}
           {(isRejected || isDuplicate) && !review.resolution_note && (
             <p className="font-sans text-xs text-muted">No note provided.</p>
