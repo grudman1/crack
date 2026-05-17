@@ -167,6 +167,19 @@
     outline: 2px solid hsl(var(--accent));
     outline-offset: 2px;
   }
+  /* Compound selector wins over the plain `.btn-pill-sm` rule above
+     (which would otherwise reset border-color via its `border:` shorthand
+     and override the selected text color). Applies the same accent
+     treatment as `.btn-ghost--selected` but at higher specificity. */
+  .btn-pill-sm.btn-ghost--selected {
+    border-color: hsl(var(--accent));
+    color: hsl(var(--accent));
+    background-color: hsl(var(--accent) / 0.08);
+  }
+  .btn-pill-sm.btn-ghost--selected:hover {
+    background-color: hsl(var(--accent) / 0.12);
+    border-color: hsl(var(--accent));
+  }
 
   /* Bordered card (used in lobby, results blocks) */
   .panel {
