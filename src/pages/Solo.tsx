@@ -12,7 +12,6 @@ import {
   computeNameInitials,
   type TraceRecord,
 } from '@/services/wikiValidationService';
-import { playBeep, playChime, resumeAudio } from '@/services/audioService';
 import { getRoundNumber, incrementRoundNumber } from '@/services/roundCounter';
 import type { GridRow, RowStatus } from '@/components/InitialsGrid';
 import { ReviewSubmitModal } from '@/components/ReviewSubmitModal';
@@ -157,14 +156,12 @@ export default function Solo() {
 
   useEffect(() => {
     if (phase === 'playing' && remaining === 0) {
-      playChime();
       void runValidation();
     }
   }, [phase, remaining, runValidation]);
 
   // ---- Phase transitions ----
   const start = () => {
-    resumeAudio();
     const r = generateRound();
     setRound(r);
     setRows(emptyRows());
@@ -174,10 +171,6 @@ export default function Solo() {
   };
 
   const handleChange = (i: number, value: string) => {
-    const prev = rows[i]?.name ?? '';
-    if (value.length > prev.length) {
-      playBeep(800 - i * 6);
-    }
     setRows((curr) => {
       const next = curr.slice();
       next[i] = { ...next[i], name: value };
