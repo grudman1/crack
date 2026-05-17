@@ -27,3 +27,7 @@ __pycache__/
 *.sln
 *.sw?
 .vercel
+
+# Regression runner artifacts (regenerated each run)
+regression-report.md
+regression.log
