@@ -18,8 +18,8 @@ export default function HowToPlay() {
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <h1 className="font-serif text-[28px] font-bold leading-tight text-ink">How to play</h1>
-      <p className="mt-1 font-serif italic text-muted">Pencil-and-paper roots, a referee from Wikipedia.</p>
+      <h1 className="font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">How to play</h1>
+      <p className="mt-1 font-serif italic text-muted lg:mt-3 lg:text-[20px]">Pencil-and-paper roots, a referee from Wikipedia.</p>
 
       <Section title="The grid">
         Each round generates 26 rows. Column A is the alphabet (A–Z). Column B is the first 26 letters of a randomly-chosen

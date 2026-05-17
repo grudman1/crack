@@ -64,8 +64,8 @@ export default function Multiplayer() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
     >
-      <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink">Multiplayer</h1>
-      <p className="mt-1 text-center font-serif italic text-muted">Play with everyone at the table.</p>
+      <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">Multiplayer</h1>
+      <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">Play with everyone at the table.</p>
 
       {!SUPABASE_CONFIGURED && (
         <div className="mt-6 border border-error/40 p-3 font-sans text-xs text-error">

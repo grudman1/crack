@@ -83,7 +83,7 @@ export function Layout() {
           </div>
         )}
       </header>
-      <main className="flex-1 py-6">
+      <main className="viewport-center flex-1 py-6 lg:py-10">
         <Outlet />
       </main>
       <footer className="border-t border-hairline">

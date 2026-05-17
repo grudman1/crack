@@ -56,8 +56,7 @@ export function InitialsGrid({
           return (
             <li
               key={alpha}
-              className="grid items-center gap-3 border-b border-hairline px-1 py-2"
-              style={{ gridTemplateColumns: '3.5rem minmax(0, 1fr) auto 1.75rem' }}
+              className="grid grid-cols-[3.75rem_minmax(0,1fr)_auto_1.75rem] items-center gap-3 border-b border-hairline px-1 py-2 lg:grid-cols-[4.75rem_minmax(0,1fr)_auto_1.75rem] lg:gap-4 lg:py-2.5"
             >
               <span className="letter-pair">
                 {alpha} <span aria-hidden>·</span> {round}
@@ -66,7 +65,7 @@ export function InitialsGrid({
                 {showResults ? (
                   <span
                     className={cn(
-                      'min-w-0 shrink-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-sans text-base text-ink',
+                      'min-w-0 shrink-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-sans text-base text-ink lg:text-[17px]',
                       invalid && 'text-muted line-through decoration-muted',
                       unanswered && 'text-empty',
                     )}
@@ -78,7 +77,7 @@ export function InitialsGrid({
                     ref={(el) => {
                       refs.current[i] = el;
                     }}
-                    className="input-line min-w-0 flex-1 text-base"
+                    className="input-line min-w-0 flex-1 text-base lg:text-[17px]"
                     value={row.name}
                     onChange={(e) => onChange?.(i, e.target.value)}
                     onKeyDown={(e) => handleKey(i, e)}
@@ -89,17 +88,17 @@ export function InitialsGrid({
                   />
                 )}
                 {showResults && invalid && row.reason && (
-                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error">
+                  <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-sans text-xs text-error lg:text-[13px]">
                     {row.reason}
                   </span>
                 )}
               </div>
-              <span className="font-serif text-sm tabular-nums text-muted">
+              <span className="font-serif text-sm tabular-nums text-muted lg:text-base">
                 {showResults && valid && (row.points ?? 0) > 0 ? row.points ?? 0 : ''}
               </span>
               <span className="flex h-5 w-5 items-center justify-center" aria-hidden>
-                {showResults && valid && <Check className="h-4 w-4 text-success" strokeWidth={2.25} />}
-                {showResults && invalid && <X className="h-4 w-4 text-error" strokeWidth={2.25} />}
+                {showResults && valid && <Check className="h-4 w-4 text-success lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />}
+                {showResults && invalid && <X className="h-4 w-4 text-error lg:h-[18px] lg:w-[18px]" strokeWidth={2.25} />}
                 {showResults && unanswered && <span className="text-empty">—</span>}
               </span>
             </li>

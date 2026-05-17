@@ -43,7 +43,7 @@
 }
 
 @layer components {
-  /* Frame: contained ~420px column */
+  /* Frame: contained column. 420px on mobile, 560px on lg+. */
   .frame {
     width: 100%;
     max-width: 26.25rem; /* 420px */
@@ -51,6 +51,33 @@
     margin-right: auto;
     padding-left: 1rem;
     padding-right: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .frame {
+      max-width: 35rem; /* 560px */
+    }
+  }
+
+  /* Main-content vertical centering on lg+. `safe center` falls back to
+     top-align when content would overflow the viewport (so the 26-row
+     grid still scrolls cleanly from the top, while shorter pages like
+     the landing or Solo setup center vertically). */
+  .viewport-center {
+    display: block;
+  }
+  @media (min-width: 1024px) {
+    .viewport-center {
+      display: flex;
+      flex-direction: column;
+      justify-content: safe center;
+    }
+  }
+
+  /* Letter pair "A · X". Mobile 17px, desktop 22px. */
+  .letter-pair-lg {
+    font-size: 1.0625rem;
+    letter-spacing: 0.06em;
   }
 
   /* Solid black primary CTA */
@@ -121,5 +148,11 @@
     @apply font-serif font-bold text-ink;
     font-size: 1.0625rem; /* 17px */
     letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  @media (min-width: 1024px) {
+    .letter-pair {
+      font-size: 1.375rem; /* 22px */
+    }
   }
 }

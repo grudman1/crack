@@ -153,15 +153,15 @@ export default function Solo() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: 'easeOut' }}
       >
-        <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink">Solo</h1>
-        <p className="mt-1 text-center font-serif italic text-muted">Choose a round length.</p>
+        <h1 className="text-center font-serif text-[28px] font-bold leading-tight text-ink lg:text-[48px]">Solo</h1>
+        <p className="mt-1 text-center font-serif italic text-muted lg:mt-3 lg:text-[20px]">Choose a round length.</p>
 
-        <div className="mt-8 flex justify-center gap-2">
+        <div className="mt-8 flex justify-center gap-2 lg:mt-10 lg:gap-3">
           {TIMER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
-              className={`btn-ghost w-20 ${totalSeconds === opt.value ? 'btn-ghost--selected' : ''}`}
+              className={`btn-ghost w-20 lg:!w-24 lg:!py-2.5 lg:!text-base ${totalSeconds === opt.value ? 'btn-ghost--selected' : ''}`}
               onClick={() => setTotalSeconds(opt.value)}
             >
               {opt.label}
@@ -182,9 +182,13 @@ export default function Solo() {
           <span>sec</span>
         </div>
 
-        <div className="mt-10 flex justify-center">
-          <button type="button" className="btn-primary" onClick={start}>
-            Start round <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.25} />
+        <div className="mt-10 flex justify-center lg:mt-14">
+          <button
+            type="button"
+            className="btn-primary lg:!w-[20rem] lg:!justify-center lg:!px-8 lg:!py-4 lg:!text-[17px]"
+            onClick={start}
+          >
+            Start round <ArrowRight className="ml-2 h-4 w-4 lg:h-5 lg:w-5" strokeWidth={2.25} />
           </button>
         </div>
       </motion.div>
