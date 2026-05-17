@@ -7,7 +7,10 @@
 // best-guess hint per submission. An admin still reads the full trace
 // before deciding.
 
-import type { TraceRecord } from '@/services/wikiValidationService';
+import {
+  canonicalInitialsCandidates,
+  type TraceRecord,
+} from '@/services/wikiValidationService';
 
 export interface TraceDiagnosis {
   likelyCause: 'validator_bug' | 'wikipedia_ambiguity' | 'unknown';
@@ -47,7 +50,23 @@ function exactHadWikibaseId(r: TraceRecord): boolean {
   return typeof wbid === 'string' && wbid.length > 0;
 }
 
-export function diagnoseTrace(trace: TraceRecord[]): TraceDiagnosis {
+/** Try to recover the round's expected pair from gate trace notes
+ *  ("typed initials PH match expected PH" / "expected SP, got SM").
+ *  Lets callers omit the explicit pair and still get a correct
+ *  matching-initials filter in pattern 4/5. */
+function parseExpectedPair(trace: TraceRecord[]): string | null {
+  for (const r of trace) {
+    if (r.stage !== 'gate') continue;
+    const m = r.note.match(/expected\s+([A-Z]{2})/);
+    if (m) return m[1]!;
+  }
+  return null;
+}
+
+export function diagnoseTrace(
+  trace: TraceRecord[],
+  expectedPair?: string,
+): TraceDiagnosis {
   // --- 1. Exact-stage initials mismatch where a stripped candidate
   //         (form "RAW/STRIPPED") existed but neither matched. This is
   //         the same family of bug we fixed with stripCanonicalNobleSuffix
@@ -97,35 +116,54 @@ export function diagnoseTrace(trace: TraceRecord[]): TraceDiagnosis {
     }
   }
 
-  // --- 4. Opensearch returned 0 hits (or every reported hit is
-  //         clearly unrelated). Wikipedia genuinely doesn't index this
-  //         person — override via FAMOUS_PEOPLE.
+  // --- 4 / 5. Opensearch ran. Split by whether ANY of the surfaced hits
+  //             have canonical initials matching the round's pair.
+  //
+  //   - 0 matching-initial hits → Wikipedia search didn't find the
+  //     person at all (or only surfaced same-search-term articles for
+  //     unrelated people). The validator did nothing wrong; the right
+  //     fix is dataset curation, not a code change.
+  //   - ≥1 matching-initial hit, all rejected downstream → the chain
+  //     had a real candidate to validate but its downstream checks
+  //     rejected it. Real validator bug.
+  //
+  //  When the pair can't be recovered from the trace, treat hits as
+  //  "unknown" and fall back to a hits-count check so we still split
+  //  the 0-hits-total case cleanly.
   const opensearchInfo = findStage(trace, 'opensearch').find(
     (r) => r.outcome === 'info' && r.label.toLowerCase().startsWith('opensearch'),
   );
   if (opensearchInfo) {
     const hits = (opensearchInfo.detail as Record<string, unknown> | undefined)?.['hits'];
-    if (Array.isArray(hits) && hits.length === 0) {
+    const hitList = Array.isArray(hits)
+      ? hits.filter((h): h is string => typeof h === 'string')
+      : [];
+    const pair = (expectedPair ?? parseExpectedPair(trace) ?? '').toUpperCase();
+    const matchingHits = pair
+      ? hitList.filter((h) => canonicalInitialsCandidates(h).includes(pair))
+      : null;
+    const noMatchingHits =
+      matchingHits !== null ? matchingHits.length === 0 : hitList.length === 0;
+
+    if (noMatchingHits) {
       return {
         likelyCause: 'wikipedia_ambiguity',
-        hint: "Wikipedia search returned no hits for this name. The validator can't help here — curate via FAMOUS_PEOPLE.",
+        hint: "Wikipedia search didn't surface a person with these initials. May not be famous, or Wikipedia is sparse. Verify the person exists before adding to dataset.",
         suspectedStage: 'opensearch',
         suggestedAction: 'add_to_dataset',
       };
     }
-  }
 
-  // --- 5. Opensearch iterated, every candidate failed downstream. The
-  //         article exists but the chain rejects it.
-  const opensearchMisses = findStage(trace, 'opensearch').filter((r) => r.outcome === 'miss');
-  const opensearchHits = findStage(trace, 'opensearch').filter((r) => r.outcome === 'hit');
-  if (opensearchMisses.length > 0 && opensearchHits.length === 0) {
-    return {
-      likelyCause: 'validator_bug',
-      hint: 'Opensearch surfaced candidates but every downstream check rejected them. Inspect the per-iteration trace to see whether the initials, length-ratio, or person check is the culprit.',
-      suspectedStage: 'opensearch',
-      suggestedAction: 'fix_validator',
-    };
+    const opensearchMisses = findStage(trace, 'opensearch').filter((r) => r.outcome === 'miss');
+    const opensearchHits = findStage(trace, 'opensearch').filter((r) => r.outcome === 'hit');
+    if (opensearchMisses.length > 0 && opensearchHits.length === 0) {
+      return {
+        likelyCause: 'validator_bug',
+        hint: 'Opensearch surfaced candidates with matching initials, but downstream checks rejected them. Investigate per-row trace to identify which check.',
+        suspectedStage: 'opensearch',
+        suggestedAction: 'fix_validator',
+      };
+    }
   }
 
   // --- 6. Disambig page iterated but every candidate failed

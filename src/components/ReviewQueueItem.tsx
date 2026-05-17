@@ -133,7 +133,10 @@ export function ReviewQueueItem({ review }: Props) {
   const [busy, setBusy] = useState(false);
   const [traceOpen, setTraceOpen] = useState(false);
 
-  const diag = useMemo(() => diagnoseTrace(review.trace ?? []), [review.trace]);
+  const diag = useMemo(
+    () => diagnoseTrace(review.trace ?? [], review.expected_pair),
+    [review.trace, review.expected_pair],
+  );
 
   const submitResolution = async (
     kind: 'approved' | 'rejected' | 'duplicate',

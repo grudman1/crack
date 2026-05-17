@@ -58,7 +58,12 @@ describe('diagnoseTrace', () => {
 
   it('rule 4 — opensearch returned zero hits (Wikipedia ambiguity)', () => {
     const trace: TraceRecord[] = [
-      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'XY match XY' },
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials XY match expected XY',
+      },
       { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
       {
         stage: 'opensearch',
@@ -68,28 +73,95 @@ describe('diagnoseTrace', () => {
         detail: { hits: [] },
       },
     ];
-    const d = diagnoseTrace(trace);
+    const d = diagnoseTrace(trace, 'XY');
     expect(d.suggestedAction).toBe('add_to_dataset');
     expect(d.likelyCause).toBe('wikipedia_ambiguity');
+    expect(d.hint.toLowerCase()).toContain('verify the person exists');
   });
 
-  it('rule 5 — opensearch surfaced candidates but all rejected downstream', () => {
+  it('rule 4 — opensearch returned hits but none have matching initials', () => {
+    // Player typed "Xyz Abc" (pair XA). Wikipedia surfaced 3 results but
+    // none of them are people whose initials are X·A — they're all
+    // unrelated articles. The validator did nothing wrong.
     const trace: TraceRecord[] = [
-      { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials XA match expected XA',
+      },
       { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
       {
         stage: 'opensearch',
         label: 'Opensearch (typo-tolerant)',
         outcome: 'info',
         note: '3 hits',
-        detail: { hits: ['Foo', 'Bar', 'Baz'] },
+        detail: { hits: ['Xenon', 'Xylophone Music', 'Xerox Corporation'] },
       },
-      { stage: 'opensearch', label: 'Opensearch iterate', outcome: 'miss', note: '"Foo" — not a person' },
-      { stage: 'opensearch', label: 'Opensearch iterate', outcome: 'miss', note: '"Bar" — not a person' },
+    ];
+    const d = diagnoseTrace(trace, 'XA');
+    expect(d.suggestedAction).toBe('add_to_dataset');
+    expect(d.likelyCause).toBe('wikipedia_ambiguity');
+    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.hint.toLowerCase()).toContain('verify the person exists');
+  });
+
+  it('rule 5 — at least one opensearch hit has matching initials, all rejected downstream', () => {
+    // Player typed something resolving to AB. Opensearch returned a
+    // mix; "Alex Baldwin" has initials AB and is the real candidate,
+    // but the chain rejected it (e.g. person-check missed). That's a
+    // validator bug, not a Wikipedia gap.
+    const trace: TraceRecord[] = [
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials AB match expected AB',
+      },
+      { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '3 hits',
+        detail: { hits: ['Alex Baldwin', 'Xenon', 'Yttrium'] },
+      },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch iterate',
+        outcome: 'miss',
+        note: '"Alex Baldwin" — not a person',
+      },
+    ];
+    const d = diagnoseTrace(trace, 'AB');
+    expect(d.suggestedAction).toBe('fix_validator');
+    expect(d.likelyCause).toBe('validator_bug');
+    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.hint.toLowerCase()).toContain('matching initials');
+  });
+
+  it('parses expected pair from gate trace when arg omitted', () => {
+    // Same fixture as the rule-4 matching-initials test, but the
+    // expectedPair arg is omitted — the helper should recover XA from
+    // the gate note and still pick the "no matching initials" path.
+    const trace: TraceRecord[] = [
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials XA match expected XA',
+      },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '3 hits',
+        detail: { hits: ['Xenon', 'Xylophone', 'Xerox'] },
+      },
     ];
     const d = diagnoseTrace(trace);
-    expect(d.suggestedAction).toBe('fix_validator');
-    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.suggestedAction).toBe('add_to_dataset');
+    expect(d.likelyCause).toBe('wikipedia_ambiguity');
   });
 
   it('rule 6 — disambig iterated but no person matched', () => {

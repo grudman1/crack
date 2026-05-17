@@ -184,8 +184,8 @@ function typedInitialsCandidates(name: string): string[] {
 /** Both plausible initials for a Wikipedia canonical title: raw, plus the
  *  variant with a post-comma noble suffix stripped (when different). Used
  *  by every chain stage so "Prince Harry, Duke of Sussex" surfaces PH as
- *  well as PS. */
-function canonicalInitialsCandidates(title: string): string[] {
+ *  well as PS. Exported for diagnostic tooling. */
+export function canonicalInitialsCandidates(title: string): string[] {
   const raw = computeNameInitials(title);
   const stripped = computeNameInitials(stripCanonicalNobleSuffix(title));
   const out: string[] = [];
