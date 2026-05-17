@@ -76,7 +76,7 @@ describe('diagnoseTrace', () => {
     const d = diagnoseTrace(trace, 'XY');
     expect(d.suggestedAction).toBe('add_to_dataset');
     expect(d.likelyCause).toBe('wikipedia_ambiguity');
-    expect(d.hint.toLowerCase()).toContain('verify the person exists');
+    expect(d.hint.toLowerCase()).toContain('verify before adding');
   });
 
   it('rule 4 — opensearch returned hits but none have matching initials', () => {
@@ -103,7 +103,35 @@ describe('diagnoseTrace', () => {
     expect(d.suggestedAction).toBe('add_to_dataset');
     expect(d.likelyCause).toBe('wikipedia_ambiguity');
     expect(d.suspectedStage).toBe('opensearch');
-    expect(d.hint.toLowerCase()).toContain('verify the person exists');
+    expect(d.hint.toLowerCase()).toContain('verify before adding');
+  });
+
+  it('rule 4 — "Charlotte Tate" CT, opensearch returns Charlotte Rae / Hatherley (none CT)', () => {
+    // Real-shape false-rejection example: the typed name resolves to
+    // CT (Charlotte + Tate). Opensearch surfaces other Charlottes
+    // (Charlotte Rae = CR, Charlotte Hatherley = CH), neither of
+    // which has matching initials. Pattern 4 — search miss, not a
+    // validator bug. The right move is to verify the person exists.
+    const trace: TraceRecord[] = [
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials CT match expected CT',
+      },
+      { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '2 hits',
+        detail: { hits: ['Charlotte Rae', 'Charlotte Hatherley'] },
+      },
+    ];
+    const d = diagnoseTrace(trace, 'CT');
+    expect(d.suggestedAction).toBe('add_to_dataset');
+    expect(d.likelyCause).toBe('wikipedia_ambiguity');
+    expect(d.suspectedStage).toBe('opensearch');
   });
 
   it('rule 5 — at least one opensearch hit has matching initials, all rejected downstream', () => {
@@ -138,6 +166,9 @@ describe('diagnoseTrace', () => {
     expect(d.likelyCause).toBe('validator_bug');
     expect(d.suspectedStage).toBe('opensearch');
     expect(d.hint.toLowerCase()).toContain('matching initials');
+    // Spec calls for the hint to enumerate the downstream checks the
+    // admin should inspect.
+    expect(d.hint).toMatch(/length ratio.*person.*surname/i);
   });
 
   it('parses expected pair from gate trace when arg omitted', () => {

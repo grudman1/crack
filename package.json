@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen-people": "tsx scripts/generateFamousPeople.ts"
+    "gen-people": "tsx scripts/generateFamousPeople.ts",
+    "gen-rasters": "tsx scripts/generateRasters.ts"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.12",
@@ -18,6 +19,8 @@
     "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@supabase/supabase-js": "^2.105.4",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "double-metaphone": "^2.0.1",
@@ -47,6 +50,7 @@
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.14",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.22.0",
     "typescript": "~6.0.2",

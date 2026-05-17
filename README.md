@@ -20,14 +20,19 @@ npm run test     # Run vitest once
 npm run lint     # ESLint
 ```
 
-Two dev-only utilities under `scripts/`:
+Dev-only utilities under `scripts/`:
 
 ```sh
 npx tsx scripts/runRegression.ts                  # Run the full validator regression set
                                                   # against the live Wikipedia API. Emits
                                                   # a Markdown report to stdout.
 npx tsx scripts/traceOne.ts "Prince Harry" PH     # Dump the validator trace for one input.
+npm run gen-rasters                               # Regenerate PNG variants from the SVG
+                                                  # sources in public/. Run + commit when
+                                                  # favicon.svg or og-image.svg change.
 ```
+
+The PNG outputs (`favicon-32x32.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `og-image.png`) live in `public/` and are checked into git so production deploys have them without a build step. The SVGs in `public/` are the source of truth.
 
 ## Project structure
 

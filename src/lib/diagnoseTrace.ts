@@ -148,7 +148,7 @@ export function diagnoseTrace(
     if (noMatchingHits) {
       return {
         likelyCause: 'wikipedia_ambiguity',
-        hint: "Wikipedia search didn't surface a person with these initials. May not be famous, or Wikipedia is sparse. Verify the person exists before adding to dataset.",
+        hint: "Wikipedia search didn't surface a person with these initials. The person may not be famous enough to have an article, or Wikipedia's data is sparse. Verify before adding to dataset.",
         suspectedStage: 'opensearch',
         suggestedAction: 'add_to_dataset',
       };
@@ -159,7 +159,7 @@ export function diagnoseTrace(
     if (opensearchMisses.length > 0 && opensearchHits.length === 0) {
       return {
         likelyCause: 'validator_bug',
-        hint: 'Opensearch surfaced candidates with matching initials, but downstream checks rejected them. Investigate per-row trace to identify which check.',
+        hint: 'Opensearch surfaced candidates with matching initials, but downstream checks (length ratio, person, surname similarity) rejected them. Inspect the per-iteration trace to identify which check is the culprit.',
         suspectedStage: 'opensearch',
         suggestedAction: 'fix_validator',
       };
