@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ThumbsDown, ThumbsUp, Copy } from 'lucide-react';
@@ -23,9 +23,18 @@ import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
 import { TimerBar } from '@/components/TimerBar';
 import { PhaseBanner } from '@/components/PhaseBanner';
 import { PhraseHeader } from '@/components/PhraseHeader';
+import { ShareButton } from '@/components/ShareButton';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
+import { buildMultiplayerShareText, type RowOutcome } from '@/lib/share';
 import { cn } from '@/lib/utils';
+import { getRoundNumber } from '@/services/roundCounter';
 
 export default function Room() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -51,6 +60,19 @@ export default function Room() {
   const isHost = !!user && !!room && room.host_id === user.id;
 
   const myGridRows: GridRow[] = useMemo(() => answers.map((name) => ({ name })), [answers]);
+
+  // Count non-empty submissions per player. Drives the progress
+  // strip shown during the playing phase so each player sees others
+  // filling in their grid in real time. Empty rows (autosaved-then-
+  // cleared) don't count.
+  const submissionsByPlayer = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const s of submissions) {
+      if (!s.name?.trim()) continue;
+      m[s.player_id] = (m[s.player_id] ?? 0) + 1;
+    }
+    return m;
+  }, [submissions]);
 
   // The room's `sentence` column stores a JSON-serialized Phrase. Old rooms
   // (pre-phrase feature) just have plain text — parse defensively and fall
@@ -105,6 +127,70 @@ export default function Room() {
       return next;
     });
   }, [submissions, user, room]);
+
+  // -------------------------------------------------------------------
+  // Autosave per row. Debounced so a keystrokes-per-second player
+  // doesn't generate one Supabase write per character, but tight
+  // enough that focus-out / phase-change / tab-close don't lose
+  // recent edits. No "Saving…" UI — players just trust the field.
+  // -------------------------------------------------------------------
+  const pendingWritesRef = useRef<Map<number, number>>(new Map());
+  // Mirror current answers in a ref so the flush handler can read the
+  // latest values without depending on stale closures.
+  const answersRef = useRef(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  const writeRow = useCallback(
+    async (i: number, value: string) => {
+      if (!room || !user) return;
+      const letters = room.letters_26 ?? '';
+      const initials = `${ALPHABET[i]}${letters[i] ?? ''}`;
+      try {
+        await upsertSubmission(room.id, user.id, i, initials, value.trim());
+      } catch (e) {
+        toast.error(sanitizeError(e));
+      }
+    },
+    [room, user],
+  );
+
+  const flushPendingWrites = useCallback(async () => {
+    const pending = Array.from(pendingWritesRef.current.entries());
+    pendingWritesRef.current.clear();
+    pending.forEach(([, timer]) => window.clearTimeout(timer));
+    await Promise.all(
+      pending.map(([i]) => writeRow(i, answersRef.current[i] ?? '')),
+    );
+  }, [writeRow]);
+
+  // Flush when leaving the playing phase (validating / results /
+  // back-to-lobby) so no edits get lost on the natural buzzer.
+  useEffect(() => {
+    if (room && room.phase !== 'playing') {
+      void flushPendingWrites();
+    }
+  }, [room?.phase, room, flushPendingWrites]);
+
+  // Flush on unmount.
+  useEffect(() => {
+    return () => {
+      void flushPendingWrites();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Defensive: flush on tab/window close. Best-effort; modern browsers
+  // ignore async work scheduled in beforeunload, but kicking off the
+  // promises buys us a chance.
+  useEffect(() => {
+    const handler = () => {
+      void flushPendingWrites();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [flushPendingWrites]);
 
   useEffect(() => {
     if (!room || room.phase !== 'playing') {
@@ -198,21 +284,6 @@ export default function Room() {
     );
   }
 
-  const handleSaveProgress = async () => {
-    if (!room || !user) return;
-    const letters = room.letters_26 ?? '';
-    try {
-      const writes = answers.map((name, i) => ({ name: name.trim(), i })).filter((x) => x.name);
-      for (const w of writes) {
-        const initials = `${ALPHABET[w.i]}${letters[w.i] ?? ''}`;
-        await upsertSubmission(room.id, user.id, w.i, initials, w.name);
-      }
-      toast.success('Saved.');
-    } catch (e) {
-      toast.error(sanitizeError(e));
-    }
-  };
-
   const handleStart = async () => {
     if (!isHost || !room) return;
     try {
@@ -253,6 +324,16 @@ export default function Room() {
       next[i] = value;
       return next;
     });
+    // Cancel any in-flight debounce for this row and queue a fresh
+    // one. The flushPendingWrites handlers (phase change / unmount /
+    // beforeunload) drain anything still pending.
+    const existing = pendingWritesRef.current.get(i);
+    if (existing) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      void writeRow(i, value);
+      pendingWritesRef.current.delete(i);
+    }, 600);
+    pendingWritesRef.current.set(i, timer);
   };
 
   const copyCode = async () => {
@@ -341,15 +422,25 @@ export default function Room() {
     return (
       <div className="frame">
         {roomPhrase && <PhraseHeader phrase={roomPhrase} className="mb-6" />}
-        <div className="flex items-baseline justify-between">
-          <PhaseBanner phase="Round" />
-          <button type="button" className="btn-pill-sm" onClick={handleSaveProgress}>
-            Save progress
-          </button>
-        </div>
+        <PhaseBanner phase="Round" />
         <div className="mt-2">
           <TimerBar remaining={remaining} total={room.timer_seconds} />
         </div>
+        {/* Per-player progress strip — populated below in Item 2 */}
+        {players.length > 1 && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 font-sans text-xs text-muted">
+            {players.map((p) => {
+              const count = submissionsByPlayer[p.player_id] ?? 0;
+              const isMe = p.player_id === user.id;
+              const name = isMe ? 'You' : p.profile?.display_name ?? 'Player';
+              return (
+                <span key={p.player_id} className={isMe ? 'text-ink font-semibold' : ''}>
+                  {name} <span className="tabular-nums">{count}/26</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div className="mt-6">
           <InitialsGrid letters={room.letters_26 ?? ''} rows={myGridRows} onChange={handleChangeAnswer} />
         </div>
@@ -409,6 +500,10 @@ function ValidatingView({
     const m: Record<number, typeof submissions> = {};
     for (let i = 0; i < 26; i++) m[i] = [];
     for (const s of submissions) {
+      // Skip empty submissions — autosave can record empty rows
+      // when a player types-then-deletes. Voting on blanks is
+      // useless noise.
+      if (!s.name?.trim()) continue;
       if (!m[s.row_index]) m[s.row_index] = [];
       m[s.row_index]!.push(s);
     }
@@ -450,7 +545,7 @@ function ValidatingView({
                   return (
                     <li key={s.id} className="flex items-center gap-2">
                       <span className="flex-1 font-sans text-sm text-ink">
-                        {s.name || <em className="text-muted">(blank)</em>}
+                        {s.name}
                       </span>
                       <span className="font-sans text-xs tabular-nums text-muted">
                         {t.yes} / {t.yes + t.no}
@@ -512,6 +607,24 @@ function ResultsView({
   const me = scores.find((s) => s.player_id === userId);
   const myRows = submissions.filter((s) => s.player_id === userId);
 
+  // Derive per-row outcomes for the share grid:
+  //   valid   — my score breakdown gave points for that row
+  //   blank   — I didn't submit a name for that row
+  //   invalid — I submitted but it didn't score
+  const rowOutcomes: RowOutcome[] = useMemo(() => {
+    const breakdown = (me?.breakdown ?? {}) as Record<string, number>;
+    const submittedRows = new Set(
+      myRows.filter((s) => s.name?.trim()).map((s) => s.row_index),
+    );
+    return Array.from({ length: 26 }, (_, i) => {
+      const pts = Number(breakdown[String(i)] ?? 0);
+      if (pts > 0) return 'valid';
+      if (!submittedRows.has(i)) return 'blank';
+      return 'invalid';
+    });
+  }, [me, myRows]);
+  const myPlacement = me ? sorted.findIndex((s) => s.player_id === userId) + 1 : 0;
+
   return (
     <motion.div
       className="frame"
@@ -520,13 +633,28 @@ function ResultsView({
       transition={{ duration: 0.2 }}
     >
       {phrase && <PhraseHeader phrase={phrase} className="mb-6" />}
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <PhaseBanner phase="Results" />
-        {isHost && (
-          <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onNewRound}>
-            New round
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {me && myPlacement > 0 && (
+            <ShareButton
+              title={`Crack · MP · Round #${getRoundNumber()}`}
+              label="Share"
+              text={buildMultiplayerShareText({
+                roundNumber: getRoundNumber(),
+                placement: myPlacement,
+                totalPlayers: sorted.length,
+                points: me.total,
+                rowOutcomes,
+              })}
+            />
+          )}
+          {isHost && (
+            <button type="button" className="btn-pill-sm bg-ink !text-paper hover:!bg-[#2a2a2a]" onClick={onNewRound}>
+              New round
+            </button>
+          )}
+        </div>
       </div>
       <section className="panel mt-4 p-5">
         <h2 className="font-serif text-lg font-bold text-ink">Leaderboard</h2>
@@ -548,28 +676,34 @@ function ResultsView({
       </section>
 
       {me && (
-        <details className="panel mt-4 p-5">
-          <summary className="cursor-pointer font-sans text-sm font-semibold text-ink">Your breakdown</summary>
-          <ul className="mt-3 space-y-1 font-sans text-sm">
-            {Object.entries(me.breakdown ?? {})
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([row, pts]) => {
-                const rowIdx = Number(row);
-                const sub = myRows.find((s) => s.row_index === rowIdx);
-                return (
-                  <li key={row} className="flex justify-between">
-                    <span>
-                      <span className="mr-2 font-serif font-bold">
-                        {ALPHABET[rowIdx]} · {letters[rowIdx] ?? ''}
-                      </span>
-                      {sub?.name ?? '—'}
-                    </span>
-                    <span className="tabular-nums text-muted">{pts}</span>
-                  </li>
-                );
-              })}
-          </ul>
-        </details>
+        <Accordion type="single" collapsible className="mt-4">
+          <AccordionItem value="breakdown" className="panel border-hairline">
+            <AccordionTrigger className="px-5 font-sans text-sm font-semibold text-ink hover:no-underline">
+              Your breakdown
+            </AccordionTrigger>
+            <AccordionContent className="px-5">
+              <ul className="space-y-1 font-sans text-sm">
+                {Object.entries(me.breakdown ?? {})
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([row, pts]) => {
+                    const rowIdx = Number(row);
+                    const sub = myRows.find((s) => s.row_index === rowIdx);
+                    return (
+                      <li key={row} className="flex justify-between">
+                        <span>
+                          <span className="mr-2 font-serif font-bold">
+                            {ALPHABET[rowIdx]} · {letters[rowIdx] ?? ''}
+                          </span>
+                          {sub?.name ?? '—'}
+                        </span>
+                        <span className="tabular-nums text-muted">{pts}</span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       )}
 
     </motion.div>

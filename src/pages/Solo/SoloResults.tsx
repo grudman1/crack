@@ -5,6 +5,7 @@ import { InitialsGrid, type GridRow } from '@/components/InitialsGrid';
 import { PhraseHeader } from '@/components/PhraseHeader';
 import { SuggestionsPanel } from '@/components/SuggestionsPanel';
 import { ShareButton } from '@/components/ShareButton';
+import { buildShareString } from '@/lib/share';
 
 interface SoloResultsProps {
   round: Round | null;
@@ -60,13 +61,14 @@ export function SoloResults({
 
       <div className="mt-3 flex justify-center">
         <ShareButton
-          result={{
+          title={`Crack #${roundNumber}`}
+          text={buildShareString({
             roundNumber,
             correctCount,
             totalCount: 26,
             rowResults: rows.map((r) => r.status === 'valid'),
             shareUrl: 'crack-black.vercel.app',
-          }}
+          })}
         />
       </div>
 

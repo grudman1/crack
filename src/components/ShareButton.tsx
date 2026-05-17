@@ -1,23 +1,31 @@
+// Share-results button. Takes a pre-built text body so it stays
+// dumb — the calling page decides what to share (Solo round, MP
+// round, etc.) and passes the formatted string in. Uses the Web
+// Share API when available, falls back to clipboard otherwise.
+
 import { useState } from 'react';
 import { Share2, Check } from 'lucide-react';
 import { toast } from '@/components/ui/toast';
-import { buildShareString, type ShareResult } from '@/lib/share';
 
 interface ShareButtonProps {
-  result: ShareResult;
+  /** The body of the share. Build via lib/share.ts helpers. */
+  text: string;
+  /** navigator.share() title. Defaults to "Crack". */
+  title?: string;
+  /** Button label override. Defaults to "Share results". */
+  label?: string;
 }
 
-export function ShareButton({ result }: ShareButtonProps) {
+export function ShareButton({ text, title = 'Crack', label = 'Share results' }: ShareButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    const text = buildShareString(result);
     const nav = navigator as Navigator & {
       share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
     };
     if (typeof nav.share === 'function') {
       try {
-        await nav.share({ title: `Crack #${result.roundNumber}`, text });
+        await nav.share({ title, text });
         return;
       } catch {
         /* user cancelled or share failed — fall through to clipboard */
@@ -40,7 +48,7 @@ export function ShareButton({ result }: ShareButtonProps) {
         </>
       ) : (
         <>
-          <Share2 className="mr-2 h-4 w-4" strokeWidth={2} /> Share results
+          <Share2 className="mr-2 h-4 w-4" strokeWidth={2} /> {label}
         </>
       )}
     </button>
