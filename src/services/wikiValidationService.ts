@@ -276,6 +276,130 @@ function surnameMatchesCanonical(typed: string, canonical: string): boolean {
   return false;
 }
 
+/** Canonical-title variants the iterate stage compares against. Mirrors
+ *  the noble/connector-stripping logic in canonicalSurnameCandidates
+ *  but returns full titles (not just surnames) so we can extract both
+ *  the first AND last token from each variant. */
+function canonicalTitleVariants(title: string): string[] {
+  const out: string[] = [title];
+  const nobleStripped = stripCanonicalNobleSuffix(title);
+  if (nobleStripped !== title) out.push(nobleStripped);
+  const ofStripped = (title ?? '').replace(/\s+of\s+.+$/i, '');
+  if (ofStripped !== title) out.push(ofStripped);
+  return out;
+}
+
+/** Stricter name match used ONLY by opensearch iterate. Local
+ *  fast-path's pool is curated (small, known-famous), so Lev ≤ 2
+ *  with a phonetic backstop is safe there. Opensearch surfaces
+ *  arbitrarily-close look-alikes — `Laura Clayton` for typed
+ *  `laurie clayton`, `Alex Norton` for `alex newton`, `Frank
+ *  Corsaro` for `Frank Corsair` — so iterate needs to be tighter.
+ *  Accept iff:
+ *
+ *    branch A) typed/canonical full-name normalized Lev ≤ 1
+ *              (catches cross-token typos like Britny → Britney)
+ *
+ *    branch B) first name normalized-exact, AND surname Lev ≤ 1
+ *              (no phonetic — `corsair`/`corsaro` share a
+ *              double-metaphone code, which is exactly the kind of
+ *              false-positive iterate must reject. Pure Lev keeps
+ *              genuine 1-char typos like Reasner → Reasoner while
+ *              dropping 2-char drifts and same-sounding lookalikes.)
+ *
+ *  Returns granular pass/fail per check on the raw canonical for the
+ *  trace detail. The boolean `pass` reflects "any variant accepts."
+ */
+interface IterateNameCheck {
+  pass: boolean;
+  firstNameOK: boolean;
+  surnameOK: boolean;
+  typedFirst: string;
+  typedLast: string;
+  canonFirst: string;
+  canonLast: string;
+}
+
+function tightSurnameMatch(typedLast: string, canonLast: string): boolean {
+  if (!typedLast || !canonLast) return false;
+  if (typedLast === canonLast) return true;
+  return levenshtein(typedLast, canonLast) <= 1;
+}
+
+function iterateNameMatchesCanonical(typed: string, canonical: string): IterateNameCheck {
+  const t = firstAndLast(typed);
+  const variants = canonicalTitleVariants(canonical);
+  // Granular fields for trace detail come from the raw title (first
+  // variant) — that's what the human sees in opensearch's hit list.
+  const cRaw = firstAndLast(variants[0]!);
+
+  const reportFirstOK = Boolean(t.first) && Boolean(cRaw.first) && t.first === cRaw.first;
+  const reportSurnameOK = tightSurnameMatch(t.last, cRaw.last);
+
+  if (!t.first || !t.last) {
+    return {
+      pass: false,
+      firstNameOK: reportFirstOK,
+      surnameOK: reportSurnameOK,
+      typedFirst: t.first,
+      typedLast: t.last,
+      canonFirst: cRaw.first,
+      canonLast: cRaw.last,
+    };
+  }
+
+  const typedFull = `${t.first} ${t.last}`;
+  for (const v of variants) {
+    const c = firstAndLast(v);
+    if (!c.first || !c.last) continue;
+    const canonFull = `${c.first} ${c.last}`;
+    // Branch A — full-name normalized Lev ≤ 1.
+    if (typedFull === canonFull) {
+      return {
+        pass: true,
+        firstNameOK: true,
+        surnameOK: true,
+        typedFirst: t.first,
+        typedLast: t.last,
+        canonFirst: c.first,
+        canonLast: c.last,
+      };
+    }
+    if (levenshtein(typedFull, canonFull) <= 1) {
+      return {
+        pass: true,
+        firstNameOK: t.first === c.first,
+        surnameOK: true,
+        typedFirst: t.first,
+        typedLast: t.last,
+        canonFirst: c.first,
+        canonLast: c.last,
+      };
+    }
+    // Branch B — first name normalized-exact + surname Lev ≤ 1.
+    if (t.first === c.first && tightSurnameMatch(t.last, c.last)) {
+      return {
+        pass: true,
+        firstNameOK: true,
+        surnameOK: true,
+        typedFirst: t.first,
+        typedLast: t.last,
+        canonFirst: c.first,
+        canonLast: c.last,
+      };
+    }
+  }
+  return {
+    pass: false,
+    firstNameOK: reportFirstOK,
+    surnameOK: reportSurnameOK,
+    typedFirst: t.first,
+    typedLast: t.last,
+    canonFirst: cRaw.first,
+    canonLast: cRaw.last,
+  };
+}
+
 // Strict local-entry match: full-name fuzzy OR (first exact + surname fuzzy).
 // This is the fast-path. Cheap and conservative — false positives here would
 // pin the wrong canonical name, so we'd rather miss locally and fall back to
@@ -846,9 +970,13 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
   //
   // The chain logic is identical (same checks, same order, same
   // early-exit). Only the trace shape changed.
-  const rejectionCounts: Record<'initials' | 'ratio' | 'surname' | 'person', number> = {
+  const rejectionCounts: Record<
+    'initials' | 'ratio' | 'firstName' | 'surname' | 'person',
+    number
+  > = {
     initials: 0,
     ratio: 0,
+    firstName: 0,
     surname: 0,
     person: 0,
   };
@@ -859,11 +987,19 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     const initialsOK = titleCands.includes(targetInitials);
 
     let ratioInfo: { value: number; pass: boolean } | null = null;
+    let firstNameOK: 'pass' | 'fail' | 'unknown' = 'unknown';
     let surnameOK: 'pass' | 'fail' | 'unknown' = 'unknown';
     let personOK: 'pass' | 'fail' | 'unknown' = 'unknown';
+    let nameCheck: IterateNameCheck | null = null;
     let qid: string | undefined;
     let sum: WikiSummary | null = null;
-    let rejectedBy: 'initials' | 'ratio' | 'surname' | 'person' | null = null;
+    let rejectedBy:
+      | 'initials'
+      | 'ratio'
+      | 'firstName'
+      | 'surname'
+      | 'person'
+      | null = null;
 
     if (!initialsOK) {
       rejectedBy = 'initials';
@@ -872,9 +1008,19 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       if (!ratioInfo.pass) {
         rejectedBy = 'ratio';
       } else {
-        surnameOK = surnameMatchesCanonical(name, hitTitle) ? 'pass' : 'fail';
-        if (surnameOK === 'fail') {
-          rejectedBy = 'surname';
+        // Stricter than the local fast-path: first-name normalized
+        // exact + surname Lev ≤ 1 OR phonetic, with a full-name
+        // Lev ≤ 1 escape hatch for cross-token typos. The local
+        // pool is curated; opensearch is the open web, so we cap
+        // the slop budget per token at one character.
+        nameCheck = iterateNameMatchesCanonical(name, hitTitle);
+        firstNameOK = nameCheck.firstNameOK ? 'pass' : 'fail';
+        surnameOK = nameCheck.surnameOK ? 'pass' : 'fail';
+        if (!nameCheck.pass) {
+          // Report whichever specific check the raw canonical
+          // failed. If both fail, the first-name slot is the more
+          // helpful diagnostic.
+          rejectedBy = nameCheck.firstNameOK ? 'surname' : 'firstName';
         } else {
           sum = await getSummary(hitTitle);
           qid = sum?.wikibase_item;
@@ -896,6 +1042,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       checks: {
         initials: initialsOK ? 'pass' : 'fail',
         ratio: ratioInfo,
+        firstName: firstNameOK,
         surname: surnameOK,
         person: personOK,
       },
@@ -908,7 +1055,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
         stage: 'opensearch',
         label: `iterate: ${hitTitle}`,
         outcome: 'hit',
-        note: `"${hitTitle}" — initials ✓, ratio ✓, surname ✓, person ✓`,
+        note: `"${hitTitle}" — initials ✓, ratio ✓, first ✓, surname ✓, person ✓`,
         detail,
       });
       trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${sum.title}` });
@@ -917,19 +1064,23 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
 
     if (rejectedBy) rejectionCounts[rejectedBy] += 1;
 
-    const typedLast = firstAndLast(name).last;
-    const canonLast = firstAndLast(hitTitle).last;
+    const typedFirstRaw = nameCheck?.typedFirst ?? firstAndLast(name).first;
+    const typedLastRaw = nameCheck?.typedLast ?? firstAndLast(name).last;
+    const canonFirstRaw = nameCheck?.canonFirst ?? firstAndLast(hitTitle).first;
+    const canonLastRaw = nameCheck?.canonLast ?? firstAndLast(hitTitle).last;
     let note: string;
     if (rejectedBy === 'initials') {
       note = `"${hitTitle}" — initials ${detail.canonicalInitials} ≠ ${targetInitials}`;
     } else if (rejectedBy === 'ratio') {
       note = `"${hitTitle}" — initials ✓, ratio ${ratioInfo!.value} < ${LENGTH_RATIO_THRESHOLD}`;
+    } else if (rejectedBy === 'firstName') {
+      note = `"${hitTitle}" — initials ✓, ratio ✓, first name '${typedFirstRaw}' ≠ '${canonFirstRaw}'`;
     } else if (rejectedBy === 'surname') {
-      note = `"${hitTitle}" — initials ✓, ratio ✓, surname '${typedLast}' ≁ '${canonLast}'`;
+      note = `"${hitTitle}" — initials ✓, ratio ✓, first ✓, surname '${typedLastRaw}' ≁ '${canonLastRaw}'`;
     } else if (rejectedBy === 'person') {
       const qidLabel = qid ? `qid ${qid}` : 'no qid';
       const personLabel = personOK === 'fail' ? 'not a person' : 'no summary';
-      note = `"${hitTitle}" — initials ✓, ratio ✓, surname ✓, ${personLabel} (${qidLabel})`;
+      note = `"${hitTitle}" — initials ✓, ratio ✓, first ✓, surname ✓, ${personLabel} (${qidLabel})`;
     } else {
       note = `"${hitTitle}" — unknown rejection`;
     }

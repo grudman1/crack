@@ -181,11 +181,23 @@ export function diagnoseTrace(
         };
       }
 
-      const allSurnameRejected = rejectedByList.every((rb) => rb === 'surname');
-      if (allSurnameRejected) {
+      // "All rejected by the name-similarity gate" — either first
+      // name or surname mismatch on every iteration. After the
+      // first-name pin was added (laurie clayton / alex newton bug),
+      // first-name failures are their own rejectedBy bucket; group
+      // them with surname for this cluster pattern since the
+      // diagnostic action is the same.
+      const allNameRejected = rejectedByList.every(
+        (rb) => rb === 'firstName' || rb === 'surname',
+      );
+      if (allNameRejected) {
+        const allFirstName = rejectedByList.every((rb) => rb === 'firstName');
+        const hint = allFirstName
+          ? 'Every opensearch candidate cleared initials + ratio but its first name differed from the typed input. Probably no real article exists for the typed person — verify before adding to dataset.'
+          : 'Every opensearch candidate cleared initials + ratio but failed the name-similarity gate (first name and/or surname). Threshold may be too tight, OR no genuine match exists in the top opensearch hits.';
         return {
           likelyCause: 'validator_bug',
-          hint: 'Every opensearch candidate cleared initials + ratio but failed the surname-similarity gate. The threshold may be too strict for this name pattern, or the canonical surnames need stripping (Lev ≤ 2, or phonetic match).',
+          hint,
           suspectedStage: 'opensearch',
           suggestedAction: 'fix_validator',
         };

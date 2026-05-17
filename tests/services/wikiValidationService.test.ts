@@ -143,6 +143,150 @@ describe('validator URL encoding', () => {
     expect(result.canonicalName).toBe('Robin Thicke');
   });
 
+  it('iterate rejects when first names differ even if surname matches exactly', async () => {
+    // Real player rejection: typed "laurie clayton" was accepted as
+    // "Laura Clayton" because the iterate stage only checked surname
+    // similarity (clayton ≡ Clayton ✓) without pinning the first name.
+    // After the fix, first names must match exactly (normalized).
+    clearValidationCache();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.includes('/page/summary/laurie%20clayton')) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes('/page/summary/Laura%20Clayton')) {
+        return new Response(
+          JSON.stringify({
+            title: 'Laura Clayton',
+            type: 'standard',
+            extract: 'Laura Clayton (born 1955) is an American composer.',
+            wikibase_item: 'Q6498805',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('action=opensearch')) {
+        return new Response(
+          JSON.stringify(['laurie clayton', ['Laura Clayton'], [''], ['']]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('EntityData/Q6498805')) {
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q6498805: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }] } },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    const result = await validateName('laurie clayton', {
+      expectedInitials: 'LC',
+      bypassCache: true,
+    });
+    expect(result.status).toBe('invalid');
+  });
+
+  it('iterate rejects when surname is Lev 2 (was at the tolerance ceiling)', async () => {
+    // Companion to the laurie/Laura case: typed "alex newton" was
+    // accepted as "Alex Norton" because surname Lev 2 used to pass.
+    // The iterate stage now tightens to Lev ≤ 1; local fast-path
+    // keeps Lev ≤ 2 for its curated pool.
+    clearValidationCache();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.includes('/page/summary/alex%20newton')) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes('/page/summary/Alex%20Norton')) {
+        return new Response(
+          JSON.stringify({
+            title: 'Alex Norton',
+            type: 'standard',
+            extract: 'Alex Norton (born 1950) is a Scottish actor.',
+            wikibase_item: 'Q2050620',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('action=opensearch')) {
+        return new Response(
+          JSON.stringify(['alex newton', ['Alex Norton'], [''], ['']]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('EntityData/Q2050620')) {
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q2050620: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }] } },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    const result = await validateName('alex newton', {
+      expectedInitials: 'AN',
+      bypassCache: true,
+    });
+    expect(result.status).toBe('invalid');
+  });
+
+  it('iterate still accepts a Lev 1 surname typo with matching first name', async () => {
+    // Regression guard: "harry reasner" → "Harry Reasoner" must still
+    // resolve via iterate. surname Lev = 1 (insert 'o'), first name
+    // exact match — the fix shouldn't break this typo path.
+    clearValidationCache();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.includes('/page/summary/Harry%20Reasner')) {
+        return new Response(null, { status: 404 });
+      }
+      if (url.includes('/page/summary/Harry%20Reasoner')) {
+        return new Response(
+          JSON.stringify({
+            title: 'Harry Reasoner',
+            type: 'standard',
+            extract: 'Harry Reasoner (April 17, 1923 – August 6, 1991) was an American journalist.',
+            wikibase_item: 'Q591670',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('action=opensearch')) {
+        return new Response(
+          JSON.stringify(['Harry Reasner', ['Harry Reasoner'], [''], ['']]),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('EntityData/Q591670')) {
+        return new Response(
+          JSON.stringify({
+            entities: {
+              Q591670: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } }] } },
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    const result = await validateName('Harry Reasner', {
+      expectedInitials: 'HR',
+      bypassCache: true,
+    });
+    expect(result.status).toBe('valid');
+    expect(result.canonicalName).toBe('Harry Reasoner');
+  });
+
   it('opensearch URL encodes the query string', async () => {
     const calls: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {

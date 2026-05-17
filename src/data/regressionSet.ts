@@ -43,14 +43,14 @@ export const REJECT_CASES: RegressionCase[] = [
   { name: 'LT', pair: 'LT', expect: 'reject', note: 'no full name' },
   { name: 'Prince', pair: 'PR', expect: 'reject', note: 'mononym — expected to fail token gate' },
   { name: '', pair: 'AA', expect: 'reject', note: 'empty input' },
-  { name: 'Elizabeth Anne', pair: 'EA', expect: 'reject', note: 'two first names; opensearch surname-stretch — was accepting as Elizabeth Anne Allen' },
-  // Known failure: Frank Corsaro is a real Wikipedia-documented opera
-  // director (Q-tagged human). Lev('corsair', 'corsaro') = 2, at the
-  // edge of the surname-similarity threshold we use everywhere. Catching
-  // this would require either tightening to Lev ≤ 1 (over-rejects 2-char
-  // typos elsewhere) or a fame floor (separate work). Left in to keep
-  // the case visible.
-  { name: 'Frank Corsair', pair: 'FC', expect: 'reject', note: 'known failure — Frank Corsaro is a real obscure person, Lev=2 within threshold' },
+  { name: 'Elizabeth Anne', pair: 'EA', expect: 'reject', note: 'two first names; surname "anne" vs "Allen" Lev > 1 fails the iterate stage' },
+  // Was a known failure until the iterate stage tightened to first-name
+  // exact + surname Lev ≤ 1 (no longer accepts Lev=2 surname drifts
+  // like corsair → Corsaro). Local fast-path keeps Lev ≤ 2 for its
+  // curated pool.
+  { name: 'Frank Corsair', pair: 'FC', expect: 'reject', note: 'surname Lev 2 (corsair vs Corsaro) — caught by tightened iterate' },
+  { name: 'laurie clayton', pair: 'LC', expect: 'reject', note: 'first-name mismatch — laurie ≠ Laura — survived iterate before the first-name pin' },
+  { name: 'alex newton', pair: 'AN', expect: 'reject', note: 'same first name, surname Lev 2 (newton vs Norton) — caught by tightened iterate' },
 ];
 
 export const ALL_CASES: RegressionCase[] = [...ACCEPT_CASES, ...REJECT_CASES];
