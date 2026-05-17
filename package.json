@@ -21,6 +21,7 @@
     "@tanstack/react-query": "^5.100.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "double-metaphone": "^2.0.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",
