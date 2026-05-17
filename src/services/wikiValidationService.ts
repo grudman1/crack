@@ -312,18 +312,32 @@ function isPrefixWithConnector(typed: string, candidate: string): boolean {
 // allowing typos of comparable length ("Roosvelt" → "Roosevelt" = 89%).
 const LENGTH_RATIO_THRESHOLD = 0.7;
 
-function wordLengthRatioOK(typed: string, candidate: string): boolean {
+/** Returns the *minimum* per-token length ratio (typed / candidate)
+ *  along with whether that minimum clears LENGTH_RATIO_THRESHOLD.
+ *  The opensearch iterate trace reports the value so admins can see
+ *  exactly how close a borderline candidate was. */
+function wordLengthRatioDetail(typed: string, candidate: string): { value: number; pass: boolean } {
   const t = nameTokens(typed).map((s) => normalizeForCompare(s)).filter(Boolean);
   const c = nameTokens(candidate).map((s) => normalizeForCompare(s)).filter(Boolean);
-  if (t.length === 0 || c.length === 0) return false;
+  if (t.length === 0 || c.length === 0) return { value: 0, pass: false };
   const n = Math.min(t.length, c.length);
+  let minRatio = Infinity;
   for (let i = 0; i < n; i++) {
     const tl = t[i]!.length;
     const cl = c[i]!.length;
-    if (cl === 0) return false;
-    if (tl / cl < LENGTH_RATIO_THRESHOLD) return false;
+    if (cl === 0) return { value: 0, pass: false };
+    const r = tl / cl;
+    if (r < minRatio) minRatio = r;
   }
-  return true;
+  if (!isFinite(minRatio)) return { value: 0, pass: false };
+  return {
+    value: Math.round(minRatio * 100) / 100,
+    pass: minRatio >= LENGTH_RATIO_THRESHOLD,
+  };
+}
+
+function wordLengthRatioOK(typed: string, candidate: string): boolean {
+  return wordLengthRatioDetail(typed, candidate).pass;
 }
 
 // --- wikipedia / wikidata fetchers + caches -------------------------------
@@ -408,7 +422,9 @@ async function getWikidata(qid: string): Promise<{ human: boolean; fictional: bo
   if (wikidataCache.has(qid)) return wikidataCache.get(qid) ?? null;
   let result: { human: boolean; fictional: boolean } | null = null;
   try {
-    const url = `https://www.wikidata.org/wiki/Special:EntityData/${qid}.json`;
+    // QIDs are always /^Q\d+$/ in practice but encodeURIComponent
+    // is cheap and gives us defense in depth.
+    const url = `https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(qid)}.json`;
     const res = await fetch(url, { headers: makeHeaders() });
     if (res.ok) {
       const data = (await res.json()) as { entities?: Record<string, WikidataEntity> };
@@ -652,7 +668,10 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     stage: 'exact',
     label: 'Wikipedia exact-title',
     outcome: 'info',
-    note: `GET /page/summary/${name}`,
+    // Show the encoded URL in the human-readable note so the trace
+    // matches what actually hits the wire — readers shouldn't
+    // confuse the display label with the request URL.
+    note: `GET /page/summary/${encodeURIComponent(name)}`,
     detail: { url: `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}` },
   });
   const exact = await getSummary(name);
@@ -806,60 +825,125 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
   }
 
   // (e) Opensearch iteration.
-  for (const hitTitle of hits.slice(0, 8)) {
+  //
+  // The original implementation emitted at most one trace record
+  // per iteration (and only on certain failure modes), then one
+  // generic summary at the end ("none of the top-N matched"). That
+  // hides where each candidate actually died. The rewrite emits one
+  // structured record per hit so the diagnostic helper — and a human
+  // reading the trace — can see exactly which check rejected each
+  // candidate, plus whether we got a wikibase_item from Wikipedia.
+  //
+  // The chain logic is identical (same checks, same order, same
+  // early-exit). Only the trace shape changed.
+  const rejectionCounts: Record<'initials' | 'ratio' | 'surname' | 'person', number> = {
+    initials: 0,
+    ratio: 0,
+    surname: 0,
+    person: 0,
+  };
+  const iteratedTitles = hits.slice(0, 8);
+
+  for (const hitTitle of iteratedTitles) {
     const titleCands = canonicalInitialsCandidates(hitTitle);
-    if (!titleCands.includes(targetInitials)) continue;
-    if (!wordLengthRatioOK(name, hitTitle)) {
-      trace?.({
-        stage: 'opensearch',
-        label: 'Opensearch iterate',
-        outcome: 'miss',
-        note: `"${hitTitle}" — initials match but length ratio < 0.7`,
-      });
-      continue;
+    const initialsOK = titleCands.includes(targetInitials);
+
+    let ratioInfo: { value: number; pass: boolean } | null = null;
+    let surnameOK: 'pass' | 'fail' | 'unknown' = 'unknown';
+    let personOK: 'pass' | 'fail' | 'unknown' = 'unknown';
+    let qid: string | undefined;
+    let sum: WikiSummary | null = null;
+    let rejectedBy: 'initials' | 'ratio' | 'surname' | 'person' | null = null;
+
+    if (!initialsOK) {
+      rejectedBy = 'initials';
+    } else {
+      ratioInfo = wordLengthRatioDetail(name, hitTitle);
+      if (!ratioInfo.pass) {
+        rejectedBy = 'ratio';
+      } else {
+        surnameOK = surnameMatchesCanonical(name, hitTitle) ? 'pass' : 'fail';
+        if (surnameOK === 'fail') {
+          rejectedBy = 'surname';
+        } else {
+          sum = await getSummary(hitTitle);
+          qid = sum?.wikibase_item;
+          if (!sum || sum.type === 'disambiguation') {
+            // No summary to person-check → can't verify → reject.
+            rejectedBy = 'person';
+          } else {
+            personOK = (await isPerson(sum)) ? 'pass' : 'fail';
+            if (personOK !== 'pass') rejectedBy = 'person';
+          }
+        }
+      }
     }
-    // Surname-similarity gate. The hard chain (exact-title) didn't
-    // match — opensearch will surface anything with similar tokens,
-    // so we have to make sure the typed surname is actually close to
-    // the canonical's before accepting (initials + ratio alone allow
-    // "dan newton" → "Dan Newhouse" style false positives).
-    if (!surnameMatchesCanonical(name, hitTitle)) {
-      const typedLast = firstAndLast(name).last;
-      const canonLast = firstAndLast(hitTitle).last;
+
+    const detail: Record<string, unknown> = {
+      canonicalTitle: hitTitle,
+      canonicalInitials: titleCands.join('/') || '—',
+      expectedPair: targetInitials,
+      checks: {
+        initials: initialsOK ? 'pass' : 'fail',
+        ratio: ratioInfo,
+        surname: surnameOK,
+        person: personOK,
+      },
+      rejectedBy,
+    };
+    if (qid) detail.qid = qid;
+
+    if (rejectedBy === null && personOK === 'pass' && sum) {
       trace?.({
         stage: 'opensearch',
-        label: 'Opensearch iterate',
-        outcome: 'miss',
-        note: `"${hitTitle}" — initials ✓, ratio ✓, but surname '${typedLast}' not similar to '${canonLast}'`,
-      });
-      continue;
-    }
-    const sum = await getSummary(hitTitle);
-    if (!sum || sum.type === 'disambiguation') continue;
-    if (await isPerson(sum)) {
-      trace?.({
-        stage: 'opensearch',
-        label: 'Opensearch iterate',
+        label: `iterate: ${hitTitle}`,
         outcome: 'hit',
-        note: `"${hitTitle}" — initials ✓, ratio ✓, person ✓`,
-        detail: { canonical: sum.title },
+        note: `"${hitTitle}" — initials ✓, ratio ✓, surname ✓, person ✓`,
+        detail,
       });
       trace?.({ stage: 'final', label: 'Accept', outcome: 'info', note: `canonical: ${sum.title}` });
       return asValid(sum);
     }
+
+    if (rejectedBy) rejectionCounts[rejectedBy] += 1;
+
+    const typedLast = firstAndLast(name).last;
+    const canonLast = firstAndLast(hitTitle).last;
+    let note: string;
+    if (rejectedBy === 'initials') {
+      note = `"${hitTitle}" — initials ${detail.canonicalInitials} ≠ ${targetInitials}`;
+    } else if (rejectedBy === 'ratio') {
+      note = `"${hitTitle}" — initials ✓, ratio ${ratioInfo!.value} < ${LENGTH_RATIO_THRESHOLD}`;
+    } else if (rejectedBy === 'surname') {
+      note = `"${hitTitle}" — initials ✓, ratio ✓, surname '${typedLast}' ≁ '${canonLast}'`;
+    } else if (rejectedBy === 'person') {
+      const qidLabel = qid ? `qid ${qid}` : 'no qid';
+      const personLabel = personOK === 'fail' ? 'not a person' : 'no summary';
+      note = `"${hitTitle}" — initials ✓, ratio ✓, surname ✓, ${personLabel} (${qidLabel})`;
+    } else {
+      note = `"${hitTitle}" — unknown rejection`;
+    }
     trace?.({
       stage: 'opensearch',
-      label: 'Opensearch iterate',
+      label: `iterate: ${hitTitle}`,
       outcome: 'miss',
-      note: `"${hitTitle}" — not a person`,
+      note,
+      detail,
     });
   }
 
+  // Summary tally — keep the at-a-glance line so a quick read of
+  // the trace still tells the high-level story.
+  const tallyParts: string[] = [];
+  for (const [k, n] of Object.entries(rejectionCounts)) {
+    if (n > 0) tallyParts.push(`${k}: ${n}`);
+  }
   trace?.({
     stage: 'opensearch',
     label: 'Opensearch iterate',
     outcome: 'miss',
-    note: `none of the top-${Math.min(8, hits.length)} hits matched initials + ratio + person`,
+    note: `${iteratedTitles.length} hit${iteratedTitles.length === 1 ? '' : 's'}, all rejected${tallyParts.length ? ` (${tallyParts.join(', ')})` : ''}.`,
+    detail: { rejectionCounts, iterated: iteratedTitles.length },
   });
   trace?.({ stage: 'final', label: 'Reject', outcome: 'info', note: "couldn't verify" });
   return { status: 'invalid', reason: "couldn't verify" };

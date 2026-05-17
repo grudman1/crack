@@ -154,6 +154,44 @@ export function diagnoseTrace(
       };
     }
 
+    // Inspect per-iteration records (added in the trace rewrite —
+    // each iterated hit emits one record with detail.rejectedBy).
+    // Cluster the rejection reasons; when every iteration died for
+    // the same reason we can be more specific than the catch-all
+    // "downstream rejected" diagnosis below.
+    const iterationRecords = findStage(trace, 'opensearch').filter(
+      (r) => r.outcome === 'miss' && r.label.toLowerCase().startsWith('iterate:'),
+    );
+    if (iterationRecords.length > 0) {
+      const rejectedByList = iterationRecords.map(
+        (r) => (r.detail as Record<string, unknown> | undefined)?.['rejectedBy'] as string | undefined,
+      );
+      const qidList = iterationRecords.map(
+        (r) => (r.detail as Record<string, unknown> | undefined)?.['qid'] as string | undefined,
+      );
+
+      const allPersonRejected = rejectedByList.every((rb) => rb === 'person');
+      const allMissingQid = qidList.every((q) => !q);
+      if (allPersonRejected && allMissingQid) {
+        return {
+          likelyCause: 'validator_bug',
+          hint: 'Every iteration was rejected by the person-check with no wikibase_item returned. Likely an API-response shape problem — possibly browser/CORS or an upstream Wikipedia change. Inspect devtools Network for the /page/summary response.',
+          suspectedStage: 'opensearch',
+          suggestedAction: 'fix_validator',
+        };
+      }
+
+      const allSurnameRejected = rejectedByList.every((rb) => rb === 'surname');
+      if (allSurnameRejected) {
+        return {
+          likelyCause: 'validator_bug',
+          hint: 'Every opensearch candidate cleared initials + ratio but failed the surname-similarity gate. The threshold may be too strict for this name pattern, or the canonical surnames need stripping (Lev ≤ 2, or phonetic match).',
+          suspectedStage: 'opensearch',
+          suggestedAction: 'fix_validator',
+        };
+      }
+    }
+
     const opensearchMisses = findStage(trace, 'opensearch').filter((r) => r.outcome === 'miss');
     const opensearchHits = findStage(trace, 'opensearch').filter((r) => r.outcome === 'hit');
     if (opensearchMisses.length > 0 && opensearchHits.length === 0) {

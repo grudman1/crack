@@ -294,6 +294,84 @@ describe('diagnoseTrace', () => {
     expect(d.hint.toLowerCase()).toContain('prominence');
   });
 
+  it('per-iteration cluster — all rejected by person, no qid (API-shape hint)', () => {
+    // The opensearch info record + several per-iteration records
+    // (added in the trace rewrite). Every iteration died on person,
+    // none surfaced a wikibase_item — the diagnostic should call out
+    // the likely API/CORS shape problem.
+    const trace: TraceRecord[] = [
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials RT match expected RT',
+      },
+      { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '3 hits',
+        detail: { hits: ['Robin Thicke', 'Robin Thicke discography', 'Robin Tunney'] },
+      },
+      {
+        stage: 'opensearch',
+        label: 'iterate: Robin Thicke',
+        outcome: 'miss',
+        note: 'no qid',
+        detail: { canonicalTitle: 'Robin Thicke', rejectedBy: 'person' },
+      },
+      {
+        stage: 'opensearch',
+        label: 'iterate: Robin Thicke discography',
+        outcome: 'miss',
+        note: 'no qid',
+        detail: { canonicalTitle: 'Robin Thicke discography', rejectedBy: 'person' },
+      },
+    ];
+    const d = diagnoseTrace(trace, 'RT');
+    expect(d.suggestedAction).toBe('fix_validator');
+    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.hint.toLowerCase()).toContain('wikibase_item');
+  });
+
+  it('per-iteration cluster — all rejected by surname (threshold-too-strict hint)', () => {
+    const trace: TraceRecord[] = [
+      {
+        stage: 'gate',
+        label: 'Initials',
+        outcome: 'hit',
+        note: 'typed initials DN match expected DN',
+      },
+      { stage: 'exact', label: 'Wikipedia exact-title', outcome: 'miss', note: '404' },
+      {
+        stage: 'opensearch',
+        label: 'Opensearch (typo-tolerant)',
+        outcome: 'info',
+        note: '2 hits',
+        detail: { hits: ['Dan Newhouse', 'Dan Norton'] },
+      },
+      {
+        stage: 'opensearch',
+        label: 'iterate: Dan Newhouse',
+        outcome: 'miss',
+        note: "surname 'newton' ≁ 'Newhouse'",
+        detail: { canonicalTitle: 'Dan Newhouse', rejectedBy: 'surname' },
+      },
+      {
+        stage: 'opensearch',
+        label: 'iterate: Dan Norton',
+        outcome: 'miss',
+        note: "surname 'newton' ≁ 'Norton'",
+        detail: { canonicalTitle: 'Dan Norton', rejectedBy: 'surname' },
+      },
+    ];
+    const d = diagnoseTrace(trace, 'DN');
+    expect(d.suggestedAction).toBe('fix_validator');
+    expect(d.suspectedStage).toBe('opensearch');
+    expect(d.hint.toLowerCase()).toContain('surname');
+  });
+
   it('rule 11 — accepted via local fast-path (bad FAMOUS_PEOPLE entry)', () => {
     const trace: TraceRecord[] = [
       { stage: 'gate', label: 'Initials', outcome: 'hit', note: 'AB match AB' },
