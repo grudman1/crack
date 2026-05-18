@@ -123,6 +123,22 @@ function stripParens(s: string): string {
   return s.replace(/\([^)]*\)/g, '');
 }
 
+// Normalize internal hyphens to spaces. Used only in the comparison
+// helpers (firstAndLast, length-ratio, local fast-path) so that a typed
+// "karl anthony towns" can align positionally with the canonical
+// "Karl-Anthony Towns" — which the prior tokenizer treated as a
+// single token "Karl-Anthony" (length 12), producing a 0.33 length
+// ratio and dropping the candidate.
+//
+// We deliberately do NOT apply this in nameTokens / computeNameInitials.
+// The gate's player-mental-model initials must keep hyphenated
+// surnames intact: "Catherine Zeta-Jones" has to stay CZ for players
+// who think of Zeta-Jones as the surname, even though dehyphenating
+// would shift her to CJ.
+function dehyphenate(s: string): string {
+  return (s ?? '').replace(/-/g, ' ');
+}
+
 function normalizeForCompare(s: string): string {
   return stripAccents(s ?? '')
     .replace(/[’'`]/g, '')
@@ -195,7 +211,10 @@ export function canonicalInitialsCandidates(title: string): string[] {
 }
 
 function firstAndLast(name: string): { first: string; last: string } {
-  const tokens = nameTokens(name ?? '').map((t) => normalizeForCompare(t));
+  // Dehyphenate first so "Karl-Anthony Towns" tokenizes as
+  // [karl, anthony, towns] for the comparison stages — matches what
+  // a player would type when they hit space instead of hyphen.
+  const tokens = nameTokens(dehyphenate(name ?? '')).map((t) => normalizeForCompare(t));
   if (tokens.length < 2) return { first: '', last: '' };
   return { first: tokens[0]!, last: tokens[tokens.length - 1]! };
 }
@@ -405,8 +424,10 @@ function iterateNameMatchesCanonical(typed: string, canonical: string): IterateN
 // pin the wrong canonical name, so we'd rather miss locally and fall back to
 // Wikipedia than over-match.
 function localEntryMatches(typed: string, entry: string): boolean {
-  const tNorm = normalizeForCompare(stripParens(typed));
-  const eNorm = normalizeForCompare(stripParens(entry));
+  // Dehyphenate both sides for the full-name comparison too, so typed
+  // "karl anthony towns" can match an entry literal "Karl-Anthony Towns".
+  const tNorm = normalizeForCompare(dehyphenate(stripParens(typed)));
+  const eNorm = normalizeForCompare(dehyphenate(stripParens(entry)));
   if (!tNorm || !eNorm) return false;
   if (tNorm === eNorm) return true;
   if (levenshtein(tNorm, eNorm) <= 2) return true;
@@ -419,8 +440,8 @@ function localEntryMatches(typed: string, entry: string): boolean {
 }
 
 function isPrefixWithConnector(typed: string, candidate: string): boolean {
-  const t = nameTokens(typed).map((s) => normalizeForCompare(s));
-  const c = nameTokens(candidate).map((s) => normalizeForCompare(s));
+  const t = nameTokens(dehyphenate(typed)).map((s) => normalizeForCompare(s));
+  const c = nameTokens(dehyphenate(candidate)).map((s) => normalizeForCompare(s));
   if (t.length === 0 || c.length <= t.length) return false;
   for (let i = 0; i < t.length; i++) {
     if (t[i] !== c[i]) return false;
@@ -441,8 +462,11 @@ const LENGTH_RATIO_THRESHOLD = 0.7;
  *  The opensearch iterate trace reports the value so admins can see
  *  exactly how close a borderline candidate was. */
 function wordLengthRatioDetail(typed: string, candidate: string): { value: number; pass: boolean } {
-  const t = nameTokens(typed).map((s) => normalizeForCompare(s)).filter(Boolean);
-  const c = nameTokens(candidate).map((s) => normalizeForCompare(s)).filter(Boolean);
+  // Dehyphenate before tokenizing so positional alignment works for
+  // hyphenated names like "Karl-Anthony Towns" — see comment on
+  // dehyphenate() for why this stays out of the gate's tokenizer.
+  const t = nameTokens(dehyphenate(typed)).map((s) => normalizeForCompare(s)).filter(Boolean);
+  const c = nameTokens(dehyphenate(candidate)).map((s) => normalizeForCompare(s)).filter(Boolean);
   if (t.length === 0 || c.length === 0) return { value: 0, pass: false };
   const n = Math.min(t.length, c.length);
   let minRatio = Infinity;
