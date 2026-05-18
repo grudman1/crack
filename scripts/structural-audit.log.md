@@ -1,336 +1,226 @@
 # Structural audit log
 
-Entries before pass: **3048**
-Entries after pass: **3006**
-Decisions: **131**
+Entries before pass: **3457**
+Entries after pass: **3442**
+Decisions: **96**
 
 ## Pattern A — `X of <place>` suffix
 
-Total: 81  ·  reassign: 43  ·  remove: 36  ·  leave: 2
+Total: 16  ·  reassign: 6  ·  remove: 6  ·  leave: 4
 
-- **BN** · _remove_ — `p('Benedict of Nursia', 'religious figure')`
-    · pre-suffix "Benedict" collapses to mononym
-- **BQ** · _reassign_ — `p('Beatrice I, Abbess of Quedlinburg', 'leadership')`
-    → **BI**: `p('Beatrice I', 'leadership', 'Beatrice_I,_Abbess_of_Quedlinburg')`
-    · pre-suffix "Beatrice I" → bucket BI, slug Beatrice_I,_Abbess_of_Quedlinburg
-- **BZ** · _remove_ — `p('Braulio of Zaragoza', 'leadership')`
-    · pre-suffix "Braulio" collapses to mononym
-- **CE** · _reassign_ — `p('Charles I of England', 'politician')`
-    → **CI**: `p('Charles I', 'politician', 'Charles_I_of_England')`
+- **AH** · _remove_ — `p('Augustine of Hippo', 'Augustine of Hippo ( aw-GUST-in…')`
+    · pre-suffix "Augustine" collapses to mononym
+- **CE** · _reassign_ — `p('Charles I of England', 'Charles I (19 November 1600 – 30 January 1649) was King of England, Scotland…')`
+    → **CI**: `p('Charles I', 'Charles I (19 November 1600 – 30 January 1649) was King of England, Scotland…', 'Charles_I_of_England')`
     · pre-suffix "Charles I" → bucket CI, slug Charles_I_of_England
-- **CR** · _reassign_ — `p('Catherine II of Russia', 'nobleman')`
-    → **CI**: `p('Catherine II', 'nobleman', 'Catherine_II_of_Russia')`
-    · pre-suffix "Catherine II" → bucket CI, slug Catherine_II_of_Russia
-- **CS** · _remove_ — `p('Catherine of Siena', 'religious figure')`
-    · pre-suffix "Catherine" collapses to mononym
-- **CZ** · _reassign_ — `p('Conrad I, Duke of Zähringen', 'medieval German duke, 1090-1152')`
-    → **CI**: `p('Conrad I', 'medieval German duke, 1090-1152', 'Conrad_I,_Duke_of_Zähringen')`
-    · pre-suffix "Conrad I" → bucket CI, slug Conrad_I,_Duke_of_Zähringen
-- **DP** · _reassign_ — `p('Darius I of Persia', 'politician')`
-    → **DI**: `p('Darius I', 'politician', 'Darius_I_of_Persia')`
-    · pre-suffix "Darius I" → bucket DI, slug Darius_I_of_Persia
-- **DQ** · _reassign_ — `p('Duke Xiao of Qin', 'leadership')`
-    → **DX**: `p('Duke Xiao', 'leadership', 'Duke_Xiao_of_Qin')`
-    · pre-suffix "Duke Xiao" → bucket DX, slug Duke_Xiao_of_Qin
-- **DV** · _remove_ — `p('Desiderius of Vienne', 'leadership')`
-    · pre-suffix "Desiderius" collapses to mononym
-- **DV** · _reassign_ — `p('Diepold III, Margrave of Vohburg', 'leadership')`
-    → **DI**: `p('Diepold III', 'leadership', 'Diepold_III,_Margrave_of_Vohburg')`
-    · pre-suffix "Diepold III" → bucket DI, slug Diepold_III,_Margrave_of_Vohburg
-- **DW** · _remove_ — `p('Diana, Princess of Wales', 'nobleman')`
+- **DW** · _remove_ — `p('Diana, Princess of Wales', 'Diana, Princess of Wales (born Diana Frances Spencer; 1 July 1961 – 31 August 1997)…')`
     · pre-suffix "Diana" collapses to mononym
-- **EC** · _remove_ — `p('Eusebius of Caesarea', 'philosopher')`
-    · pre-suffix "Eusebius" collapses to mononym
-- **EE** · _reassign_ — `p('Elizabeth I of England', 'politician')`
-    → **EI**: `p('Elizabeth I', 'politician', 'Elizabeth_I_of_England')`
-    · pre-suffix "Elizabeth I" → bucket EI, slug Elizabeth_I_of_England
-- **EE** · _reassign_ — `p('Edward VI of England', 'politician')`
-    → **EV**: `p('Edward VI', 'politician', 'Edward_VI_of_England')`
-    · pre-suffix "Edward VI" → bucket EV, slug Edward_VI_of_England
-- **ET** · _leave_ — `p('Emperor Taizong of Tang', 'politician')`
+- **EI** · _reassign_ — `p('Edward Guinness, 1st Earl of Iveagh', 'Edward Cecil Guinness, 1st Earl of Iveagh,  (10 November 1847 – 7 October 1927)…')`
+    → **EG**: `p('Edward Guinness', 'Edward Cecil Guinness, 1st Earl of Iveagh,  (10 November 1847 – 7 October 1927)…', 'Edward_Guinness,_1st_Earl_of_Iveagh')`
+    · pre-suffix "Edward Guinness" → bucket EG, slug Edward_Guinness,_1st_Earl_of_Iveagh
+- **ET** · _leave_ — `p('Emperor Taizong of Tang', 'Emperor of China from 626 to 649')`
     · pre-suffix "Emperor Taizong" initials already match current bucket — leave alone
-- **EU** · _reassign_ — `p('Ermengol III, Count of Urgell', 'leadership')`
-    → **EI**: `p('Ermengol III', 'leadership', 'Ermengol_III,_Count_of_Urgell')`
-    · pre-suffix "Ermengol III" → bucket EI, slug Ermengol_III,_Count_of_Urgell
-- **FA** · _remove_ — `p('Francis of Assisi', 'philosopher')`
-    · pre-suffix "Francis" collapses to mononym
-- **FI** · _leave_ — `p('Faisal I of Iraq', 'politician')`
+- **FI** · _leave_ — `p('Faisal I of Iraq', 'King of Iraq from 1921 to 1933')`
     · pre-suffix "Faisal I" initials already match current bucket — leave alone
-- **FP** · _reassign_ — `p('Frederick II of Prussia', 'writer')`
-    → **FI**: `p('Frederick II', 'writer', 'Frederick_II_of_Prussia')`
-    · pre-suffix "Frederick II" → bucket FI, slug Frederick_II_of_Prussia
-- **HB** · _remove_ — `p('Hildegard of Bingen', 'religious figure')`
-    · pre-suffix "Hildegard" collapses to mononym
-- **HE** · _reassign_ — `p('Henry VIII of England', 'nobleman')`
-    → **HV**: `p('Henry VIII', 'nobleman', 'Henry_VIII_of_England')`
-    · pre-suffix "Henry VIII" → bucket HV, slug Henry_VIII_of_England
-- **HE** · _reassign_ — `p('Haile Selassie I of Ethiopia', 'politician')`
-    → **HI**: `p('Haile Selassie I', 'politician', 'Haile_Selassie_I_of_Ethiopia')`
-    · pre-suffix "Haile Selassie I" → bucket HI, slug Haile_Selassie_I_of_Ethiopia
-- **HF** · _reassign_ — `p('Henry IV of France', 'French king, 1553-1610')`
-    → **HI**: `p('Henry IV', 'French king, 1553-1610', 'Henry_IV_of_France')`
-    · pre-suffix "Henry IV" → bucket HI, slug Henry_IV_of_France
-- **HJ** · _remove_ — `p('Hussein of Jordan', 'politician')`
-    · pre-suffix "Hussein" collapses to mononym
-- **HN** · _reassign_ — `p('Harald V of Norway', 'politician')`
-    → **HV**: `p('Harald V', 'politician', 'Harald_V_of_Norway')`
-    · pre-suffix "Harald V" → bucket HV, slug Harald_V_of_Norway
-- **HO** · _reassign_ — `p('Horace Walpole, 4th Earl of Orford', 'politician')`
-    → **HW**: `p('Horace Walpole', 'politician', 'Horace_Walpole,_4th_Earl_of_Orford')`
-    · pre-suffix "Horace Walpole" → bucket HW, slug Horace_Walpole,_4th_Earl_of_Orford
-- **IA** · _remove_ — `p('Ignatius of Antioch', 'religious figure')`
-    · pre-suffix "Ignatius" collapses to mononym
-- **IC** · _remove_ — `p('Iamblichus of Chalcis', 'philosopher')`
-    · pre-suffix "Iamblichus" collapses to mononym
-- **IC** · _remove_ — `p('Ivo of Chartres', 'leadership')`
-    · pre-suffix "Ivo" collapses to mononym
-- **IF** · _remove_ — `p('Ida of Formbach-Ratelnberg', 'leadership')`
-    · pre-suffix "Ida" collapses to mononym
-- **II** · _remove_ — `p('Imerius of Immertal', 'leadership')`
-    · pre-suffix "Imerius" collapses to mononym
-- **IL** · _remove_ — `p('Ignatius of Loyola', 'religious figure')`
-    · pre-suffix "Ignatius" collapses to mononym
-- **IN** · _remove_ — `p('Ingegerd of Norway', 'leadership')`
-    · pre-suffix "Ingegerd" collapses to mononym
-- **IS** · _remove_ — `p('Isidore of Seville', 'philosopher')`
-    · pre-suffix "Isidore" collapses to mononym
-- **JX** · _remove_ — `p('Jie of Xia', 'leadership')`
-    · pre-suffix "Jie" collapses to mononym
-- **KQ** · _reassign_ — `p('King Min of Qi', 'leadership')`
-    → **KM**: `p('King Min', 'leadership', 'King_Min_of_Qi')`
-    · pre-suffix "King Min" → bucket KM, slug King_Min_of_Qi
-- **KQ** · _reassign_ — `p('King Xiaowen of Qin', 'leadership')`
-    → **KX**: `p('King Xiaowen', 'leadership', 'King_Xiaowen_of_Qin')`
-    · pre-suffix "King Xiaowen" → bucket KX, slug King_Xiaowen_of_Qin
-- **KZ** · _reassign_ — `p('King Tai of Zhou', 'leadership')`
-    → **KT**: `p('King Tai', 'leadership', 'King_Tai_of_Zhou')`
-    · pre-suffix "King Tai" → bucket KT, slug King_Tai_of_Zhou
-- **KZ** · _reassign_ — `p('King Wuling of Zhao', 'leadership')`
-    → **KW**: `p('King Wuling', 'leadership', 'King_Wuling_of_Zhao')`
-    · pre-suffix "King Wuling" → bucket KW, slug King_Wuling_of_Zhao
-- **LF** · _reassign_ — `p('Louis XIV of France', 'politician')`
-    → **LX**: `p('Louis XIV', 'politician', 'Louis_XIV_of_France')`
-    · pre-suffix "Louis XIV" → bucket LX, slug Louis_XIV_of_France
-- **ME** · _reassign_ — `p('Mary I of England', 'politician')`
-    → **MI**: `p('Mary I', 'politician', 'Mary_I_of_England')`
-    · pre-suffix "Mary I" → bucket MI, slug Mary_I_of_England
-- **NE** · _reassign_ — `p('Neoptolemus II of Epirus', 'leadership')`
-    → **NI**: `p('Neoptolemus II', 'leadership', 'Neoptolemus_II_of_Epirus')`
-    · pre-suffix "Neoptolemus II" → bucket NI, slug Neoptolemus_II_of_Epirus
-- **NX** · _remove_ — `p('Norbert of Xanten', 'leadership')`
-    · pre-suffix "Norbert" collapses to mononym
-- **OI** · _remove_ — `p('Olowe of Ise', 'culture')`
-    · pre-suffix "Olowe" collapses to mononym
-- **OK** · _remove_ — `p('Octa of Kent', 'leadership')`
-    · pre-suffix "Octa" collapses to mononym
-- **ON** · _reassign_ — `p('Olaf III of Norway', 'leadership')`
-    → **OI**: `p('Olaf III', 'leadership', 'Olaf_III_of_Norway')`
-    · pre-suffix "Olaf III" → bucket OI, slug Olaf_III_of_Norway
-- **ON** · _reassign_ — `p('Olav Magnusson of Norway', 'other')`
-    → **OM**: `p('Olav Magnusson', 'other', 'Olav_Magnusson_of_Norway')`
-    · pre-suffix "Olav Magnusson" → bucket OM, slug Olav_Magnusson_of_Norway
-- **OO** · _reassign_ — `p('Otto I of Olomouc', 'leadership')`
-    → **OI**: `p('Otto I', 'leadership', 'Otto_I_of_Olomouc')`
-    · pre-suffix "Otto I" → bucket OI, slug Otto_I_of_Olomouc
-- **OZ** · _reassign_ — `p('Otto II, Count of Zutphen', 'leadership')`
-    → **OI**: `p('Otto II', 'leadership', 'Otto_II,_Count_of_Zutphen')`
-    · pre-suffix "Otto II" → bucket OI, slug Otto_II,_Count_of_Zutphen
-- **PE** · _reassign_ — `p('Prince Philip, Duke of Edinburgh', 'nobleman')`
-    → **PP**: `p('Prince Philip', 'nobleman', 'Prince_Philip,_Duke_of_Edinburgh')`
-    · pre-suffix "Prince Philip" → bucket PP, slug Prince_Philip,_Duke_of_Edinburgh
-- **PR** · _reassign_ — `p('Peter I of Russia', 'politician')`
-    → **PI**: `p('Peter I', 'politician', 'Peter_I_of_Russia')`
-    · pre-suffix "Peter I" → bucket PI, slug Peter_I_of_Russia
-- **PS** · _reassign_ — `p('Philip II of Spain', 'politician')`
-    → **PI**: `p('Philip II', 'politician', 'Philip_II_of_Spain')`
-    · pre-suffix "Philip II" → bucket PI, slug Philip_II_of_Spain
-- **PT** · _remove_ — `p('Paul of Tarsus', 'religious figure')`
-    · pre-suffix "Paul" collapses to mononym
-- **QH** · _reassign_ — `p('Queen Emma of Hawaii', 'leadership')`
-    → **QE**: `p('Queen Emma', 'leadership', 'Queen_Emma_of_Hawaii')`
-    · pre-suffix "Queen Emma" → bucket QE, slug Queen_Emma_of_Hawaii
-- **QJ** · _reassign_ — `p('Queen Rania of Jordan', 'companion')`
-    → **QR**: `p('Queen Rania', 'companion', 'Queen_Rania_of_Jordan')`
-    · pre-suffix "Queen Rania" → bucket QR, slug Queen_Rania_of_Jordan
-- **QN** · _reassign_ — `p('Queen Divyeshwari of Nepal', 'leadership')`
-    → **QD**: `p('Queen Divyeshwari', 'leadership', 'Queen_Divyeshwari_of_Nepal')`
-    · pre-suffix "Queen Divyeshwari" → bucket QD, slug Queen_Divyeshwari_of_Nepal
-- **RE** · _reassign_ — `p('Richard I of England', 'politician')`
-    → **RI**: `p('Richard I', 'politician', 'Richard_I_of_England')`
-    · pre-suffix "Richard I" → bucket RI, slug Richard_I_of_England
-- **SC** · _remove_ — `p('Simonides of Ceos', 'writer')`
-    · pre-suffix "Simonides" collapses to mononym
-- **SU** · _reassign_ — `p('Sancho Garcés, Lord of Uncastillo', 'leadership')`
-    → **SG**: `p('Sancho Garcés', 'leadership', 'Sancho_Garcés,_Lord_of_Uncastillo')`
-    · pre-suffix "Sancho Garcés" → bucket SG, slug Sancho_Garcés,_Lord_of_Uncastillo
-- **TA** · _remove_ — `p('Teresa of Ávila', 'religious figure')`
-    · pre-suffix "Teresa" collapses to mononym
-- **TE** · _reassign_ — `p('Thomas Cromwell, 1st Earl of Essex', 'public worker')`
-    → **TC**: `p('Thomas Cromwell', 'public worker', 'Thomas_Cromwell,_1st_Earl_of_Essex')`
-    · pre-suffix "Thomas Cromwell" → bucket TC, slug Thomas_Cromwell,_1st_Earl_of_Essex
-- **UC** · _reassign_ — `p('Ulric II, Margrave of Carniola', 'leadership')`
-    → **UI**: `p('Ulric II', 'leadership', 'Ulric_II,_Margrave_of_Carniola')`
-    · pre-suffix "Ulric II" → bucket UI, slug Ulric_II,_Margrave_of_Carniola
-- **UE** · _remove_ — `p('Ulrich of Eppenstein', 'leadership')`
-    · pre-suffix "Ulrich" collapses to mononym
-- **UL** · _remove_ — `p('Urraca of León', 'leadership')`
-    · pre-suffix "Urraca" collapses to mononym
-- **UP** · _reassign_ — `p('Ulrich I, Bishop of Passau', 'leadership')`
-    → **UB**: `p('Ulrich I, Bishop', 'leadership', 'Ulrich_I,_Bishop_of_Passau')`
-    · pre-suffix "Ulrich I, Bishop" → bucket UB, slug Ulrich_I,_Bishop_of_Passau
-- **US** · _reassign_ — `p('Uroš I, Grand Prince of Serbia', 'leadership')`
-    → **UP**: `p('Uroš I, Grand Prince', 'leadership', 'Uroš_I,_Grand_Prince_of_Serbia')`
-    · pre-suffix "Uroš I, Grand Prince" → bucket UP, slug Uroš_I,_Grand_Prince_of_Serbia
-- **UZ** · _remove_ — `p('Urraca of Zamora', 'leadership')`
-    · pre-suffix "Urraca" collapses to mononym
-- **UZ** · _remove_ — `p('Ulrich of Zell', 'leadership')`
-    · pre-suffix "Ulrich" collapses to mononym
-- **VN** · _remove_ — `p('Vladimir of Novgorod', 'leadership')`
-    · pre-suffix "Vladimir" collapses to mononym
-- **WE** · _reassign_ — `p('William III of England', 'politician')`
-    → **WI**: `p('William III', 'politician', 'William_III_of_England')`
-    · pre-suffix "William III" → bucket WI, slug William_III_of_England
-- **WO** · _remove_ — `p('William of Ockham', 'philosopher')`
+- **HN** · _reassign_ — `p('Haakon, Crown Prince of Norway', 'Haakon, Crown Prince of Norway (Norwegian pronunciation: [ˈhôːkʊn]; Haakon Magnus; born 20 July 1973)…')`
+    → **HP**: `p('Haakon, Crown Prince', 'Haakon, Crown Prince of Norway (Norwegian pronunciation: [ˈhôːkʊn]; Haakon Magnus; born 20 July 1973)…', 'Haakon,_Crown_Prince_of_Norway')`
+    · pre-suffix "Haakon, Crown Prince" → bucket HP, slug Haakon,_Crown_Prince_of_Norway
+- **KK** · _remove_ — `p('Katharine, Duchess of Kent', 'Katharine, Duchess of Kent (born Katharine Lucy Mary Worsley; 22 February 1933 – 4 September 2025)…')`
+    · pre-suffix "Katharine" collapses to mononym
+- **MN** · _reassign_ — `p('Mette-Marit, Crown Princess of Norway', 'Mette-Marit, Crown Princess of Norway (born Mette-Marit Tjessem Høiby 19 August 1973)…')`
+    → **MP**: `p('Mette-Marit, Crown Princess', 'Mette-Marit, Crown Princess of Norway (born Mette-Marit Tjessem Høiby 19 August 1973)…', 'Mette-Marit,_Crown_Princess_of_Norway')`
+    · pre-suffix "Mette-Marit, Crown Princess" → bucket MP, slug Mette-Marit,_Crown_Princess_of_Norway
+- **MS** · _remove_ — `p('Mary, Queen of Scots', 'Mary, Queen of Scots (8 December 1542 – 8 February 1587), also known as Mary Stuart or Mary I of Scotland…')`
+    · pre-suffix "Mary" collapses to mononym
+- **PE** · _leave_ — `p('Prince Edward, Duke of Edinburgh', 'Prince Edward, Duke of Edinburgh (Edward Antony Richard Louis; born 10 March 1964)…')`
+    · pre-suffix "Prince Edward" initials already match current bucket — leave alone
+- **PK** · _reassign_ — `p('Prince Edward, Duke of Kent', 'Prince Edward, Duke of Kent (Edward George Nicholas Paul Patrick; born 9 October 1935)…')`
+    → **PE**: `p('Prince Edward', 'Prince Edward, Duke of Kent (Edward George Nicholas Paul Patrick; born 9 October 1935)…', 'Prince_Edward,_Duke_of_Kent')`
+    · pre-suffix "Prince Edward" → bucket PE, slug Prince_Edward,_Duke_of_Kent
+- **PK** · _reassign_ — `p('Prince George, Duke of Kent', 'Prince George, Duke of Kent (George Edward Alexander Edmund; 20 December 1902 – 25 August 1942)…')`
+    → **PG**: `p('Prince George', 'Prince George, Duke of Kent (George Edward Alexander Edmund; 20 December 1902 – 25 August 1942)…', 'Prince_George,_Duke_of_Kent')`
+    · pre-suffix "Prince George" → bucket PG, slug Prince_George,_Duke_of_Kent
+- **RP** · _leave_ — `p('Reza Pahlavi, Crown Prince of Iran', 'Reza Pahlavi (born 31 October 1960) is an Iranian political activist and the former Crown Prince of the…')`
+    · pre-suffix "Reza Pahlavi, Crown Prince" initials already match current bucket — leave alone
+- **WW** · _remove_ — `p('William, Prince of Wales', 'William, Prince of Wales (William Arthur Philip Louis; born 21 June 1982)…')`
     · pre-suffix "William" collapses to mononym
-- **YG** · _remove_ — `p('Yejong of Goryeo', 'leadership')`
-    · pre-suffix "Yejong" collapses to mononym
-- **YJ** · _reassign_ — `p('Yeghishe Tourian of Jerusalem', 'culture')`
-    → **YT**: `p('Yeghishe Tourian', 'culture', 'Yeghishe_Tourian_of_Jerusalem')`
-    · pre-suffix "Yeghishe Tourian" → bucket YT, slug Yeghishe_Tourian_of_Jerusalem
-- **YK** · _reassign_ — `p('Yaropolk II of Kiev', 'other')`
-    → **YI**: `p('Yaropolk II', 'other', 'Yaropolk_II_of_Kiev')`
-    · pre-suffix "Yaropolk II" → bucket YI, slug Yaropolk_II_of_Kiev
-- **YP** · _reassign_ — `p('Yadanabon I of Pagan', 'leadership')`
-    → **YI**: `p('Yadanabon I', 'leadership', 'Yadanabon_I_of_Pagan')`
-    · pre-suffix "Yadanabon I" → bucket YI, slug Yadanabon_I_of_Pagan
-- **ZC** · _remove_ — `p('Zeno of Citium', 'philosopher')`
-    · pre-suffix "Zeno" collapses to mononym
-- **ZE** · _remove_ — `p('Zeno of Elea', 'philosopher')`
-    · pre-suffix "Zeno" collapses to mononym
-- **ZK** · _remove_ — `p('Zbyslava of Kiev', 'leadership')`
-    · pre-suffix "Zbyslava" collapses to mononym
-- **ZP** · _remove_ — `p('Zbigniew of Poland', 'other')`
-    · pre-suffix "Zbigniew" collapses to mononym
-- **ZS** · _remove_ — `p('Zaida of Seville', 'leadership')`
-    · pre-suffix "Zaida" collapses to mononym
+- **YJ** · _remove_ — `p('Yeonsangun of Joseon', 'Yeonsangun or Prince Yeonsan (Korean: 연산군; Hanja: 燕山君; 23 November 1476 – 20 November 1506)…')`
+    · pre-suffix "Yeonsangun" collapses to mononym
 
 ## Pattern B — Roman-numeral tail
 
-Total: 26  ·  reassign: 11  ·  remove: 6  ·  leave: 9
+Total: 50  ·  reassign: 8  ·  remove: 9  ·  leave: 33
 
-- **BX** · _remove_ — `p('Brother XII', 'culture')`
-    · pre-suffix "Brother" collapses to mononym
-- **CI** · _remove_ — `p('Constantine I', 'politician')`
-    · pre-suffix "Constantine" collapses to mononym
-- **CI** · _remove_ — `p('Cleombrotus I', 'leadership')`
-    · pre-suffix "Cleombrotus" collapses to mononym
-- **FI** · _remove_ — `p('Fariburz I', 'leadership')`
-    · pre-suffix "Fariburz" collapses to mononym
-- **IX** · _reassign_ — `p('Ichikawa Ebizō XI', 'culture')`
-    → **IE**: `p('Ichikawa Ebizō XI', 'culture', 'Ichikawa_Ebizō_XI')`
-    · pre-suffix "Ichikawa Ebizō" → bucket IE, slug Ichikawa_Ebizō_XI
-- **IX** · _reassign_ — `p('Ichikawa Danjūrō XII', 'culture')`
-    → **ID**: `p('Ichikawa Danjūrō XII', 'culture', 'Ichikawa_Danjūrō_XII')`
-    · pre-suffix "Ichikawa Danjūrō" → bucket ID, slug Ichikawa_Danjūrō_XII
-- **KX** · _reassign_ — `p('Kataoka Nizaemon XII', 'culture')`
-    → **KN**: `p('Kataoka Nizaemon XII', 'culture', 'Kataoka_Nizaemon_XII')`
-    · pre-suffix "Kataoka Nizaemon" → bucket KN, slug Kataoka_Nizaemon_XII
-- **LI** · _remove_ — `p('Leonidas I', 'politician')`
-    · pre-suffix "Leonidas" collapses to mononym
-- **MX** · _reassign_ — `p('Morita Kanya XII', 'culture')`
-    → **MK**: `p('Morita Kanya XII', 'culture', 'Morita_Kanya_XII')`
-    · pre-suffix "Morita Kanya" → bucket MK, slug Morita_Kanya_XII
-- **OI** · _remove_ — `p('Oyekan I', 'leadership')`
-    · pre-suffix "Oyekan" collapses to mononym
-- **PA** · _leave_ — `p('Pope Alexander VI', 'religious figure')`
+- **AI** · _reassign_ — `p('Arthur Guinness II', 'Arthur Guinness (12 March 1768 – 9 June 1855) was an Anglo-Irish brewer, banker…')`
+    → **AG**: `p('Arthur Guinness II', 'Arthur Guinness (12 March 1768 – 9 June 1855) was an Anglo-Irish brewer, banker…', 'Arthur_Guinness_II')`
+    · pre-suffix "Arthur Guinness" → bucket AG, slug Arthur_Guinness_II
+- **BI** · _leave_ — `p('Beatrice I', 'Beatrice I, also known as Beatrice of Franconia (German: Beatrix von Franken; 1037 – 13 July 1061)…', 'Beatrice_I,_Abbess_of_Quedlinburg')`
+    · explicit slug "Beatrice_I,_Abbess_of_Quedlinburg" differs from derived "Beatrice_I" — treat as previously curated
+- **CI** · _remove_ — `p('Charles III', 'King of the United Kingdom since 2022')`
+    · pre-suffix "Charles" collapses to mononym
+- **CI** · _reassign_ — `p('Cleto Escobedo III', 'American bandleader (1966–2025)')`
+    → **CE**: `p('Cleto Escobedo III', 'American bandleader (1966–2025)', 'Cleto_Escobedo_III')`
+    · pre-suffix "Cleto Escobedo" → bucket CE, slug Cleto_Escobedo_III
+- **DI** · _leave_ — `p('Darius I', 'Persian ruler from 522 to 486 BCE', 'Darius_I_of_Persia')`
+    · explicit slug "Darius_I_of_Persia" differs from derived "Darius_I" — treat as previously curated
+- **EI** · _remove_ — `p('Elizabeth II', 'Elizabeth II (Elizabeth Alexandra Mary; 21 April 1926…')`
+    · pre-suffix "Elizabeth" collapses to mononym
+- **EI** · _leave_ — `p('Elizabeth I', 'Queen of England and Ireland from 1558 to 1603', 'Elizabeth_I_of_England')`
+    · explicit slug "Elizabeth_I_of_England" differs from derived "Elizabeth_I" — treat as previously curated
+- **EI** · _leave_ — `p('Ermengol III', 'Ermengol or Armengol III (1032 – 1065), called el de Barbastro…', 'Ermengol_III,_Count_of_Urgell')`
+    · explicit slug "Ermengol_III,_Count_of_Urgell" differs from derived "Ermengol_III" — treat as previously curated
+- **EV** · _remove_ — `p('Edward VIII', 'Edward VIII (Edward Albert Christian George Andrew Patrick David; 23 June 1894 – 28 May 1972)…')`
+    · pre-suffix "Edward" collapses to mononym
+- **EV** · _remove_ — `p('Edward VII', 'Edward VII (Albert Edward; 9 November 1841…')`
+    · pre-suffix "Edward" collapses to mononym
+- **EV** · _leave_ — `p('Edward VI', 'King of England and Ireland from 1547 to 1553', 'Edward_VI_of_England')`
+    · explicit slug "Edward_VI_of_England" differs from derived "Edward_VI" — treat as previously curated
+- **FI** · _leave_ — `p('Frederick II', 'King of Prussia from 1740 to 1786', 'Frederick_II_of_Prussia')`
+    · explicit slug "Frederick_II_of_Prussia" differs from derived "Frederick_II" — treat as previously curated
+- **GI** · _remove_ — `p('George III', 'George III (George William Frederick; 4 June 1738…')`
+    · pre-suffix "George" collapses to mononym
+- **GV** · _remove_ — `p('George VI', 'George VI (Albert Frederick Arthur George; 14 December 1895…')`
+    · pre-suffix "George" collapses to mononym
+- **GV** · _remove_ — `p('George V', 'George V (George Frederick Ernest Albert; 3 June 1865…')`
+    · pre-suffix "George" collapses to mononym
+- **HI** · _leave_ — `p('Haile Selassie I', 'Emperor of Ethiopia from 1930 to 1974', 'Haile_Selassie_I_of_Ethiopia')`
+    · explicit slug "Haile_Selassie_I_of_Ethiopia" differs from derived "Haile_Selassie_I" — treat as previously curated
+- **HI** · _leave_ — `p('Henry IV', 'French king, 1553-1610', 'Henry_IV_of_France')`
+    · explicit slug "Henry_IV_of_France" differs from derived "Henry_IV" — treat as previously curated
+- **HV** · _leave_ — `p('Henry VIII', 'King of England from 1509 to 1547', 'Henry_VIII_of_England')`
+    · explicit slug "Henry_VIII_of_England" differs from derived "Henry_VIII" — treat as previously curated
+- **HV** · _leave_ — `p('Harald V', 'King of Norway since 1991', 'Harald_V_of_Norway')`
+    · explicit slug "Harald_V_of_Norway" differs from derived "Harald_V" — treat as previously curated
+- **ID** · _leave_ — `p('Ichikawa Danjūrō XII', 'Ichikawa Danjūrō XII (十二代目 市川 團十郎, Jūnidaime Ichikawa Danjūrō; August 6, 1946 – February 3…')`
+    · pre-suffix "Ichikawa Danjūrō" initials already match current bucket — leave alone
+- **JI** · _reassign_ — `p('James VI and I', 'James VI and I (James Charles Stuart; 19 June 1566…')`
+    → **JA**: `p('James VI and I', 'James VI and I (James Charles Stuart; 19 June 1566…', 'James_VI_and_I')`
+    · pre-suffix "James VI and" → bucket JA, slug James_VI_and_I
+- **KI** · _remove_ — `p('Kamehameha I', 'Kamehameha I (Hawaiian pronunciation: [kəmehəˈmɛhə]; Kalani Paiʻea Wohi o Kaleikini Kealiʻikui Kamehameha o…')`
+    · pre-suffix "Kamehameha" collapses to mononym
+- **LX** · _leave_ — `p('Louis XIV', 'King of France from 1643 to 1715', 'Louis_XIV_of_France')`
+    · explicit slug "Louis_XIV_of_France" differs from derived "Louis_XIV" — treat as previously curated
+- **LX** · _reassign_ — `p('Lil Nas X', 'Montero Lamar Hill (born April 9, 1999), better known by his stage name Lil Nas X ( NAHZ)…')`
+    → **LN**: `p('Lil Nas X', 'Montero Lamar Hill (born April 9, 1999), better known by his stage name Lil Nas X ( NAHZ)…', 'Lil_Nas_X')`
+    · pre-suffix "Lil Nas" → bucket LN, slug Lil_Nas_X
+- **MI** · _leave_ — `p('Mary I', 'Queen of England and Ireland from 1553 to 1558', 'Mary_I_of_England')`
+    · explicit slug "Mary_I_of_England" differs from derived "Mary_I" — treat as previously curated
+- **MX** · _remove_ — `p('Malcolm X', 'Malcolm X (born Malcolm Little, later el-Hajj Malik el-Shabazz; May 19, 1925 – February 21…')`
+    · pre-suffix "Malcolm" collapses to mononym
+- **NI** · _leave_ — `p('Neoptolemus II', 'Neoptolemus II (Greek: Νεοπτόλεμος; died 297 BC) was king of Epirus from 302 BC until his death.', 'Neoptolemus_II_of_Epirus')`
+    · explicit slug "Neoptolemus_II_of_Epirus" differs from derived "Neoptolemus_II" — treat as previously curated
+- **OI** · _leave_ — `p('Olaf III', 'Olaf III or Olaf Haraldsson (Old Norse: Óláfr Haraldsson, Norwegian: Olav Haraldsson; c. 1050…', 'Olaf_III_of_Norway')`
+    · explicit slug "Olaf_III_of_Norway" differs from derived "Olaf_III" — treat as previously curated
+- **OI** · _leave_ — `p('Otto I', 'Otto I (1045 – 9 June 1087), known as Otto the Fair (Czech: Ota Sličný), a member of the Přemyslid dynasty…', 'Otto_I_of_Olomouc')`
+    · explicit slug "Otto_I_of_Olomouc" differs from derived "Otto_I" — treat as previously curated
+- **PA** · _leave_ — `p('Pope Alexander VI', 'Head of the Catholic Church from 1492 to 1503')`
     · pre-suffix "Pope Alexander" initials already match current bucket — leave alone
-- **PB** · _leave_ — `p('Pope Boniface VIII', 'religious figure')`
-    · pre-suffix "Pope Boniface" initials already match current bucket — leave alone
-- **PG** · _leave_ — `p('Pope Gregory VII', 'religious figure')`
+- **PB** · _leave_ — `p('Pope Benedict XVI', 'Head of the Catholic Church from 2005 to 2013')`
+    · pre-suffix "Pope Benedict" initials already match current bucket — leave alone
+- **PB** · _leave_ — `p('Pope Benedict XV', 'Head of the Catholic Church from 1914 to 1922')`
+    · pre-suffix "Pope Benedict" initials already match current bucket — leave alone
+- **PG** · _leave_ — `p('Pope Gregory I', '64th Bishop of Rome; head of the Roman Catholic Church from AD 590 to 604')`
     · pre-suffix "Pope Gregory" initials already match current bucket — leave alone
-- **PI** · _reassign_ — `p('Pope Gregory I', 'religious figure')`
-    → **PG**: `p('Pope Gregory I', 'religious figure', 'Pope_Gregory_I')`
-    · pre-suffix "Pope Gregory" → bucket PG, slug Pope_Gregory_I
-- **PJ** · _leave_ — `p('Pope Julius II', 'religious figure')`
+- **PG** · _leave_ — `p('Pope Gregory VII', 'Head of the Catholic Church from 1073 to 1085')`
+    · pre-suffix "Pope Gregory" initials already match current bucket — leave alone
+- **PI** · _leave_ — `p('Peter I', 'Tsar of Russia from 1682 to 1725', 'Peter_I_of_Russia')`
+    · explicit slug "Peter_I_of_Russia" differs from derived "Peter_I" — treat as previously curated
+- **PI** · _reassign_ — `p('Pope John Paul I', 'Pope John Paul I (born Albino Luciani; 17 October 1912…')`
+    → **PP**: `p('Pope John Paul I', 'Pope John Paul I (born Albino Luciani; 17 October 1912…', 'Pope_John_Paul_I')`
+    · pre-suffix "Pope John Paul" → bucket PP, slug Pope_John_Paul_I
+- **PI** · _leave_ — `p('Philip II', 'King of Spain (1556–1598) and Portugal (1580–1598)', 'Philip_II_of_Spain')`
+    · explicit slug "Philip_II_of_Spain" differs from derived "Philip_II" — treat as previously curated
+- **PI** · _reassign_ — `p('Pope Leo I', 'Pope Leo I (Italian: Leone I) (c.')`
+    → **PL**: `p('Pope Leo I', 'Pope Leo I (Italian: Leone I) (c.', 'Pope_Leo_I')`
+    · pre-suffix "Pope Leo" → bucket PL, slug Pope_Leo_I
+- **PJ** · _leave_ — `p('Pope Julius II', 'Head of the Catholic Church from 1503 to 1513')`
     · pre-suffix "Pope Julius" initials already match current bucket — leave alone
-- **PL** · _leave_ — `p('Pope Leo X', 'religious figure')`
+- **PL** · _leave_ — `p('Pope Leo XIII', 'Head of the Catholic Church from 1878 to 1903')`
     · pre-suffix "Pope Leo" initials already match current bucket — leave alone
-- **PP** · _leave_ — `p('Pope John Paul II', 'religious figure')`
+- **PL** · _leave_ — `p('Pope Leo X', 'Head of the Catholic Church from 1513 to 1521')`
+    · pre-suffix "Pope Leo" initials already match current bucket — leave alone
+- **PP** · _leave_ — `p('Pope John Paul II', 'Head of the Catholic Church from 1978 to 2005')`
     · pre-suffix "Pope John Paul" initials already match current bucket — leave alone
-- **PU** · _leave_ — `p('Pope Urban VIII', 'religious figure')`
-    · pre-suffix "Pope Urban" initials already match current bucket — leave alone
-- **PU** · _leave_ — `p('Pope Urban II', 'leadership')`
-    · pre-suffix "Pope Urban" initials already match current bucket — leave alone
-- **PX** · _reassign_ — `p('Pope Benedict XVI', 'religious figure')`
-    → **PB**: `p('Pope Benedict XVI', 'religious figure', 'Pope_Benedict_XVI')`
-    · pre-suffix "Pope Benedict" → bucket PB, slug Pope_Benedict_XVI
-- **PX** · _reassign_ — `p('Pope Pius XII', 'religious figure')`
-    → **PP**: `p('Pope Pius XII', 'religious figure', 'Pope_Pius_XII')`
-    · pre-suffix "Pope Pius" → bucket PP, slug Pope_Pius_XII
-- **PX** · _reassign_ — `p('Pope Leo XIII', 'religious figure')`
-    → **PL**: `p('Pope Leo XIII', 'religious figure', 'Pope_Leo_XIII')`
-    · pre-suffix "Pope Leo" → bucket PL, slug Pope_Leo_XIII
-- **PX** · _reassign_ — `p('Pope Benedict XV', 'religious figure')`
-    → **PB**: `p('Pope Benedict XV', 'religious figure', 'Pope_Benedict_XV')`
-    · pre-suffix "Pope Benedict" → bucket PB, slug Pope_Benedict_XV
-- **RX** · _reassign_ — `p('Rama Varma XV', 'leadership')`
-    → **RV**: `p('Rama Varma XV', 'leadership', 'Rama_Varma_XV')`
-    · pre-suffix "Rama Varma" → bucket RV, slug Rama_Varma_XV
-- **RX** · _reassign_ — `p('Rama Varma XVII', 'leadership')`
-    → **RV**: `p('Rama Varma XVII', 'leadership', 'Rama_Varma_XVII')`
-    · pre-suffix "Rama Varma" → bucket RV, slug Rama_Varma_XVII
-- **YC** · _leave_ — `p('Young Corbett II', 'sports/games')`
-    · pre-suffix "Young Corbett" initials already match current bucket — leave alone
+- **PP** · _leave_ — `p('Pope Pius XII', 'Head of the Catholic Church from 1939 to 1958')`
+    · pre-suffix "Pope Pius" initials already match current bucket — leave alone
+- **PV** · _reassign_ — `p('Pope Paul VI', 'Pope Paul VI (born Giovanni Battista Enrico Antonio Maria Montini; 26 September 1897…')`
+    → **PP**: `p('Pope Paul VI', 'Pope Paul VI (born Giovanni Battista Enrico Antonio Maria Montini; 26 September 1897…', 'Pope_Paul_VI')`
+    · pre-suffix "Pope Paul" → bucket PP, slug Pope_Paul_VI
+- **PX** · _reassign_ — `p('Pope Leo XIV', 'Pope Leo XIV (born Robert Francis Prevost, pronounced  PREE-vohst, September 14…')`
+    → **PL**: `p('Pope Leo XIV', 'Pope Leo XIV (born Robert Francis Prevost, pronounced  PREE-vohst, September 14…', 'Pope_Leo_XIV')`
+    · pre-suffix "Pope Leo" → bucket PL, slug Pope_Leo_XIV
+- **QE** · _leave_ — `p('Queen Elizabeth II', 'Queen of the United Kingdom, 1926-2022', 'Elizabeth_II')`
+    · explicit slug "Elizabeth_II" differs from derived "Queen_Elizabeth_II" — treat as previously curated
+- **RI** · _leave_ — `p('Richard I', 'King of England from 1189 to 1199', 'Richard_I_of_England')`
+    · explicit slug "Richard_I_of_England" differs from derived "Richard_I" — treat as previously curated
+- **UI** · _leave_ — `p('Ulric II', 'Ulric II (also Ulrich, Odalric, Oudalricus…', 'Ulric_II,_Margrave_of_Carniola')`
+    · explicit slug "Ulric_II,_Margrave_of_Carniola" differs from derived "Ulric_II" — treat as previously curated
+- **WI** · _leave_ — `p('William III', 'King of England, Scotland, and Ireland from 1689 to 1702', 'William_III_of_England')`
+    · explicit slug "William_III_of_England" differs from derived "William_III" — treat as previously curated
+- **YI** · _leave_ — `p('Yaropolk II', 'Yaropolk II Vladimirovich (1082…', 'Yaropolk_II_of_Kiev')`
+    · explicit slug "Yaropolk_II_of_Kiev" differs from derived "Yaropolk_II" — treat as previously curated
 
 ## Pattern C — `computeNameInitials(name)` ≠ bucket
 
-Total: 24  ·  reassign: 0  ·  remove: 0  ·  leave: 24
+Total: 30  ·  reassign: 0  ·  remove: 0  ·  leave: 30
 
-- **AB** · _leave_ — `p('Aziz Ansari', 'comedian, b. 1983')`
-    · computeNameInitials="AA" bucket="AB" — flagged for review; not auto-touched.
 - **AD** · _leave_ — `p('Alfred Adler', 'psychotherapist, 1870-1937')`
     · computeNameInitials="AA" bucket="AD" — flagged for review; not auto-touched.
-- **AJ** · _leave_ — `p('A. J. Foyt', 'racing driver, b. 1935', 'A._J._Foyt')`
-    · computeNameInitials="AF" bucket="AJ" — flagged for review; not auto-touched.
 - **AT** · _leave_ — `p('André the Giant', 'wrestler and actor, 1946-1993')`
     · computeNameInitials="AG" bucket="AT" — flagged for review; not auto-touched.
 - **BD** · _leave_ — `p('Brian De Palma', 'filmmaker, b. 1940')`
     · computeNameInitials="BP" bucket="BD" — flagged for review; not auto-touched.
-- **DO** · _leave_ — `p('Daniel Ortega Saavedra', 'Nicaraguan president')`
+- **CJ** · _leave_ — `p('Chris Eubank Jr', 'Christopher Livingstone Eubank Jr (born 18 September 1989) is a British professional boxer.')`
+    · computeNameInitials="CE" bucket="CJ" — flagged for review; not auto-touched.
+- **DJ** · _leave_ — `p('Donald Trump Jr.', 'Donald John Trump Jr.')`
+    · computeNameInitials="DT" bucket="DJ" — flagged for review; not auto-touched.
+- **DO** · _leave_ — `p('Daniel Ortega Saavedra', 'Leader of Nicaragua (1979–1990; since 2007)')`
     · computeNameInitials="DS" bucket="DO" — flagged for review; not auto-touched.
-- **ER** · _leave_ — `p('Edward R. Murrow', 'journalist, 1908-1965', 'Edward_R._Murrow')`
+- **ER** · _leave_ — `p('Edward R. Murrow', 'journalist, 1908-1965')`
     · computeNameInitials="EM" bucket="ER" — flagged for review; not auto-touched.
-- **FI** · _leave_ — `p('Flavius Apion I.', 'leadership')`
-    · computeNameInitials="FA" bucket="FI" — flagged for review; not auto-touched.
-- **HG** · _leave_ — `p('H. G. Wells', 'novelist, 1866-1946', 'H._G._Wells')`
+- **FJ** · _leave_ — `p('Floyd Mayweather Jr.', 'Floyd Joy Mayweather Jr.')`
+    · computeNameInitials="FM" bucket="FJ" — flagged for review; not auto-touched.
+- **FJ** · _leave_ — `p('Freddie Prinze Jr.', 'Freddie James Prinze Jr.')`
+    · computeNameInitials="FP" bucket="FJ" — flagged for review; not auto-touched.
+- **HG** · _leave_ — `p('H. G. Wells', 'novelist, 1866-1946')`
     · computeNameInitials="HW" bucket="HG" — flagged for review; not auto-touched.
-- **IQ** · _leave_ — `p('I. T. Quinn', 'leadership')`
-    · computeNameInitials="TQ" bucket="IQ" — flagged for review; not auto-touched.
-- **JK** · _leave_ — `p('J. K. Rowling', 'novelist, b. 1965', 'J._K._Rowling')`
+- **JJ** · _leave_ — `p('John F. Kennedy Jr.', 'John Fitzgerald Kennedy Jr.')`
+    · computeNameInitials="JK" bucket="JJ" — flagged for review; not auto-touched.
+- **JK** · _leave_ — `p('J. K. Rowling', 'novelist, b. 1965')`
     · computeNameInitials="JR" bucket="JK" — flagged for review; not auto-touched.
 - **JV** · _leave_ — `p('James Van Der Beek', 'actor (Dawson\'s Creek), b. 1977')`
     · computeNameInitials="JB" bucket="JV" — flagged for review; not auto-touched.
-- **KN** · _leave_ — `p('Knute Rockne', 'football coach, 1888-1931')`
-    · computeNameInitials="KR" bucket="KN" — flagged for review; not auto-touched.
+- **KD** · _leave_ — `p('Gary Plauché', 'On March 16, 1984, Leon Gary Plauché ( ploh-SHAY; November 10, 1945 – October 20…')`
+    · computeNameInitials="GP" bucket="KD" — flagged for review; not auto-touched.
+- **KI** · _leave_ — `p('Kenneth Walker III (running back)', 'Kenneth Walker III (born October 20…')`
+    · computeNameInitials="KW" bucket="KI" — flagged for review; not auto-touched.
 - **LD** · _leave_ — `p('Lana Del Rey', 'singer, b. 1985')`
     · computeNameInitials="LR" bucket="LD" — flagged for review; not auto-touched.
+- **LY** · _leave_ — `p('Im Yoon-ah', 'Lim Yoona (Korean: 임윤아; born May 30, 1990), also known mononymously as Yoona…')`
+    · computeNameInitials="IY" bucket="LY" — flagged for review; not auto-touched.
 - **ME** · _leave_ — `p('Margaret E. Knight', 'inventor, 1838-1914')`
     · computeNameInitials="MK" bucket="ME" — flagged for review; not auto-touched.
-- **NU** · _leave_ — `p('Nikola Šuhaj', 'other')`
-    · computeNameInitials="NS" bucket="NU" — flagged for review; not auto-touched.
-- **OA** · _leave_ — `p('Omar Abdel Rahman', '')`
+- **NJ** · _leave_ — `p('N. T. Rama Rao Jr.', 'Nandamuri Taraka Rama Rao (born 20 May 1983), popularly known as NTR Jr, is an Indian actor, producer…')`
+    · computeNameInitials="NR" bucket="NJ" — flagged for review; not auto-touched.
+- **OA** · _leave_ — `p('Omar Abdel Rahman', 'Sheikh Omar Abdel-Rahman (Arabic: عمر عبد الرحمن), (ʾUmar ʾAbd ar-Raḥmān; 3 May 1938 – 18 February 2017)…')`
     · computeNameInitials="OR" bucket="OA" — flagged for review; not auto-touched.
-- **OD** · _leave_ — `p('Oscar De La Hoya', '')`
+- **OD** · _leave_ — `p('Oscar De La Hoya', 'Oscar De La Hoya ( DAY lə HOY-ə, Spanish: [ˈoskaɾ ðe la ˈoʝa]; born February 4…')`
     · computeNameInitials="OH" bucket="OD" — flagged for review; not auto-touched.
-- **OJ** · _leave_ — `p('O. J. Simpson', 'NFL/celebrity, 1947-2024', 'O._J._Simpson')`
+- **OJ** · _leave_ — `p('O. J. Simpson', 'NFL/celebrity, 1947-2024')`
     · computeNameInitials="OS" bucket="OJ" — flagged for review; not auto-touched.
 - **RD** · _leave_ — `p('Rebecca De Mornay', 'actress, b. 1959')`
     · computeNameInitials="RM" bucket="RD" — flagged for review; not auto-touched.
+- **RJ** · _leave_ — `p('Robert Downey Jr.', 'American actor (born 1965)')`
+    · computeNameInitials="RD" bucket="RJ" — flagged for review; not auto-touched.
+- **RJ** · _leave_ — `p('Robert F. Kennedy Jr.', 'Robert Francis Kennedy Jr.')`
+    · computeNameInitials="RK" bucket="RJ" — flagged for review; not auto-touched.
 - **SV** · _leave_ — `p('Stevie Van Zandt', 'musician, b. 1950')`
     · computeNameInitials="SZ" bucket="SV" — flagged for review; not auto-touched.
-- **TV** · _leave_ — `p('Thomas von Essen', '')`
+- **TV** · _leave_ — `p('Thomas von Essen', 'Thomas von Essen (born 1945 in Brooklyn…')`
     · computeNameInitials="TE" bucket="TV" — flagged for review; not auto-touched.
-- **YS** · _leave_ — `p('Yves Saint Laurent', 'French fashion designer, 1936-2008')`
-    · computeNameInitials="YL" bucket="YS" — flagged for review; not auto-touched.
-- **ZU** · _leave_ — `p('Zlatko Šulentić', 'culture')`
-    · computeNameInitials="ZS" bucket="ZU" — flagged for review; not auto-touched.
+- **VA** · _leave_ — `p('V. S. Achuthanandan', 'Velikkakathu Sankaran Achuthanandan (20 October 1923 – 21 July 2025), also known by his initialism VS…')`
+    · computeNameInitials="SA" bucket="VA" — flagged for review; not auto-touched.
+- **VE** · _leave_ — `p('V. J. Edgecombe', 'Valdez Drexel "V.')`
+    · computeNameInitials="JE" bucket="VE" — flagged for review; not auto-touched.
+- **VJ** · _leave_ — `p('Vladimir Guerrero Jr.', 'Dominican-Canadian baseball player (born 1999)')`
+    · computeNameInitials="VG" bucket="VJ" — flagged for review; not auto-touched.
