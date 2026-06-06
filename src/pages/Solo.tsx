@@ -97,60 +97,88 @@ export default function Solo() {
   }, [phase]);
 
   // ---- Validation pipeline ----
+  // Two passes:
+  //   1. Synchronous: rows that are empty (unanswered) or fail the
+  //      local initials gate. These need no network.
+  //   2. Concurrent: API-backed validations, bounded to CONCURRENCY at
+  //      a time. Sequential 26 × ~600ms API-roundtrip used to stall on
+  //      "Validating…" for 15+ seconds; the chain is independent per
+  //      row so we just fan out.
   const runValidation = useCallback(async () => {
     if (!round) return;
     setPhase('validating');
     setValidationProgress(0);
+    const CONCURRENCY = 5;
     const next = rows.slice();
+    const apiQueue: number[] = [];
+
     for (let i = 0; i < 26; i++) {
       const name = next[i]?.name.trim() ?? '';
       const expected = `${ALPHABET[i]}${round.letters[i] ?? ''}`;
       if (!name) {
         next[i] = { ...next[i]!, status: 'unanswered', points: 0 };
-      } else {
-        const localInitials = computeNameInitials(name);
-        if (localInitials && localInitials !== expected) {
-          // Synthesize a minimal trace for the modal so admins see what
-          // happened even on a local-only rejection.
+        continue;
+      }
+      const localInitials = computeNameInitials(name);
+      if (localInitials && localInitials !== expected) {
+        next[i] = {
+          ...next[i]!,
+          status: 'invalid',
+          reason: `expected ${expected}, got ${localInitials}`,
+          points: 0,
+          trace: [
+            { stage: 'gate', label: 'Initials', outcome: 'miss', note: `expected ${expected}, got ${localInitials}` },
+            { stage: 'final', label: 'Reject', outcome: 'info', note: `expected ${expected}, got ${localInitials}` },
+          ],
+        };
+        continue;
+      }
+      apiQueue.push(i);
+    }
+
+    let done = 26 - apiQueue.length;
+    setRows([...next]);
+    setValidationProgress((done / 26) * 100);
+
+    const runOne = async (i: number) => {
+      const name = next[i]?.name.trim() ?? '';
+      const expected = `${ALPHABET[i]}${round.letters[i] ?? ''}`;
+      const trace: TraceRecord[] = [];
+      try {
+        const result = await validateName(name, {
+          expectedInitials: expected,
+          trace: (r) => trace.push(r),
+        });
+        if (result.status === 'valid') {
           next[i] = {
             ...next[i]!,
-            status: 'invalid',
-            reason: `expected ${expected}, got ${localInitials}`,
-            points: 0,
-            trace: [
-              { stage: 'gate', label: 'Initials', outcome: 'miss', note: `expected ${expected}, got ${localInitials}` },
-              { stage: 'final', label: 'Reject', outcome: 'info', note: `expected ${expected}, got ${localInitials}` },
-            ],
+            status: 'valid',
+            canonicalName: result.canonicalName,
+            points: 10,
+            trace,
           };
         } else {
-          // Capture the trace for every API-backed validation, accept
-          // or reject — symmetric "?" flag needs it on valid rows too.
-          const trace: TraceRecord[] = [];
-          try {
-            const result = await validateName(name, {
-              expectedInitials: expected,
-              trace: (r) => trace.push(r),
-            });
-            if (result.status === 'valid') {
-              next[i] = {
-                ...next[i]!,
-                status: 'valid',
-                canonicalName: result.canonicalName,
-                points: 10,
-                trace,
-              };
-            } else {
-              next[i] = { ...next[i]!, status: 'invalid', reason: result.reason, points: 0, trace };
-            }
-          } catch (err) {
-            next[i] = { ...next[i]!, status: 'invalid', reason: sanitizeError(err), points: 0, trace };
-            toast.error(sanitizeError(err));
-          }
+          next[i] = { ...next[i]!, status: 'invalid', reason: result.reason, points: 0, trace };
         }
+      } catch (err) {
+        next[i] = { ...next[i]!, status: 'invalid', reason: sanitizeError(err), points: 0, trace };
+        toast.error(sanitizeError(err));
       }
+      done += 1;
       setRows([...next]);
-      setValidationProgress(((i + 1) / 26) * 100);
-    }
+      setValidationProgress((done / 26) * 100);
+    };
+
+    // Simple bounded-concurrency worker pool.
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, apiQueue.length) }, async () => {
+      while (cursor < apiQueue.length) {
+        const idx = apiQueue[cursor++]!;
+        await runOne(idx);
+      }
+    });
+    await Promise.all(workers);
+
     setPhase('results');
   }, [round, rows]);
 

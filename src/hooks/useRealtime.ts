@@ -79,8 +79,16 @@ export function useRealtimeRow<T>(opts: UseRealtimeRowOpts): UseRealtimeRowResul
         { event: '*', schema: 'public', table, filter },
         (payload) => {
           if (!alive) return;
-          if (payload.eventType === 'DELETE') setRow(null);
-          else setRow(payload.new as T);
+          if (payload.eventType === 'DELETE') {
+            setRow(null);
+            return;
+          }
+          // Defense in depth: server-side filter should already keep
+          // off-match payloads out, but if the filter ever fails open
+          // we don't want an unrelated row to overwrite our state.
+          const next = payload.new as Record<string, unknown> | null;
+          if (next && next[matchColumn] !== matchValue) return;
+          setRow(next as T);
         },
       )
       .subscribe();
@@ -117,7 +125,16 @@ export interface UseRealtimeTableOpts<T> {
 export interface UseRealtimeTableResult<T> {
   rows: T[];
   loading: boolean;
+  error: Error | null;
   refresh: () => void;
+}
+
+// Minimum shape we read off a realtime payload. The full payload type
+// from @supabase/supabase-js is generic; we narrow by hand because the
+// realtime callback hands us `any`.
+interface RealtimeRow {
+  id?: string;
+  [key: string]: unknown;
 }
 
 export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeTableResult<T> {
@@ -125,9 +142,13 @@ export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeT
   const [rows, setRows] = useState<T[]>([]);
   const enabled = Boolean(loadFn || matchValue !== undefined);
   const [loading, setLoading] = useState<boolean>(enabled);
+  const [error, setError] = useState<Error | null>(null);
 
   // load is a stable callback the caller can invoke (returned as
-  // `refresh`) and that we also call internally on mount + realtime tick.
+  // `refresh`) and that we also call internally on mount + realtime
+  // fallback. The catch surfaces loadFn / query errors as `error`
+  // instead of leaking them as unhandled promise rejections, which is
+  // what hid the room_players RLS recursion in production.
   const load = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
@@ -140,11 +161,15 @@ export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeT
         if (matchColumn && matchValue !== undefined) {
           q = q.eq(matchColumn, matchValue);
         }
-        const { data: d, error } = await q;
-        if (error) throw error;
+        const { data: d, error: qErr } = await q;
+        if (qErr) throw qErr;
         data = d ?? [];
       }
       setRows((Array.isArray(data) ? data : []) as T[]);
+      setError(null);
+    } catch (e) {
+      console.error(`[useRealtimeTable:${table}] load failed`, e);
+      setError(e instanceof Error ? e : new Error(String(e)));
     } finally {
       setLoading(false);
     }
@@ -154,6 +179,7 @@ export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeT
     if (!enabled) {
       setRows([]);
       setLoading(false);
+      setError(null);
       return;
     }
     let alive = true;
@@ -172,8 +198,37 @@ export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeT
         filter
           ? { event: '*', schema: 'public', table, filter }
           : { event: '*', schema: 'public', table },
-        () => {
+        (payload) => {
           if (!alive) return;
+          // Incremental merge when we own the load query (no custom
+          // loadFn). With a custom loadFn the consumer may do joins or
+          // post-processing we can't reproduce from the payload, so we
+          // fall back to a full reload there.
+          if (!loadFn) {
+            const next = payload.new as RealtimeRow | null;
+            const old = payload.old as RealtimeRow | null;
+            // Defense in depth: trust the server-side filter, but
+            // double-check the match column on row payloads.
+            const newMatches =
+              !matchColumn ||
+              matchValue === undefined ||
+              (next && next[matchColumn] === matchValue);
+            if (payload.eventType === 'INSERT' && newMatches && next) {
+              setRows((curr) => {
+                if (next.id && curr.some((r) => (r as RealtimeRow).id === next.id)) return curr;
+                return [...curr, next as T];
+              });
+              return;
+            }
+            if (payload.eventType === 'UPDATE' && next?.id) {
+              setRows((curr) => curr.map((r) => ((r as RealtimeRow).id === next.id ? (next as T) : r)));
+              return;
+            }
+            if (payload.eventType === 'DELETE' && old?.id) {
+              setRows((curr) => curr.filter((r) => (r as RealtimeRow).id !== old.id));
+              return;
+            }
+          }
           void load();
         },
       )
@@ -183,7 +238,7 @@ export function useRealtimeTable<T>(opts: UseRealtimeTableOpts<T>): UseRealtimeT
       alive = false;
       void supabase.removeChannel(channel);
     };
-  }, [enabled, table, matchColumn, matchValue, channelKey, load]);
+  }, [enabled, table, matchColumn, matchValue, channelKey, load, loadFn]);
 
-  return { rows, loading, refresh: () => void load() };
+  return { rows, loading, error, refresh: () => void load() };
 }

@@ -561,7 +561,7 @@ async function main(): Promise<void> {
     const sum = await getSummary(c.slug);
     if (!sum) return null;
     if (sum.type !== 'standard') return null;
-    let qid = sum.wikibase_item;
+    const qid = sum.wikibase_item;
     let wd: WikidataInfo | null = null;
     if (qid) wd = await getWikidataInfo(qid);
     // If Wikidata is unavailable, fall back to the langlinks signal and

@@ -24,6 +24,7 @@ export interface RoomRow {
   timer_seconds: number;
   sentence: string | null;
   letters_26: string | null;
+  play_started_at: string | null;
   created_at: string;
 }
 

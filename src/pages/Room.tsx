@@ -14,6 +14,8 @@ import {
   leaveRoom,
   resetRoomForNewRound,
   setRoomPhase,
+  startRound,
+  advancePhaseIfExpired,
   upsertSubmission,
   castVote,
 } from '@/services/roomService';
@@ -46,7 +48,6 @@ export default function Room() {
 
   const [answers, setAnswers] = useState<string[]>(() => Array(26).fill(''));
   const [remaining, setRemaining] = useState(0);
-  const playStartRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
   // Anonymous join flow (deep link in incognito, etc.)
   const [joinName, setJoinName] = useState('');
@@ -202,13 +203,22 @@ export default function Room() {
       tickRef.current = null;
       return;
     }
-    if (playStartRef.current === null) playStartRef.current = Date.now();
+    // Single source of truth is rooms.play_started_at, set server-side
+    // by the start_round RPC. Every client computes remaining from the
+    // same stamp, so timers don't drift between host and joiners. Fall
+    // back to "now" if the column hasn't propagated yet (one tick of
+    // jitter before the realtime update lands).
+    const start = room.play_started_at ? Date.parse(room.play_started_at) : Date.now();
     const update = () => {
-      const elapsed = Math.floor((Date.now() - (playStartRef.current ?? Date.now())) / 1000);
+      const elapsed = Math.floor((Date.now() - start) / 1000);
       const rem = Math.max(0, room.timer_seconds - elapsed);
       setRemaining(rem);
-      if (rem <= 0 && isHost) {
-        void setRoomPhase(room.id, 'validating').catch(() => {});
+      if (rem <= 0) {
+        // Any room member can advance — the RPC is idempotent and only
+        // acts once the timer has actually expired server-side. Previously
+        // only the host could advance, so a host disconnect mid-round
+        // stranded the game in 'playing' forever.
+        void advancePhaseIfExpired(room.id).catch(() => {});
       }
     };
     update();
@@ -217,11 +227,7 @@ export default function Room() {
       if (tickRef.current) window.clearInterval(tickRef.current);
       tickRef.current = null;
     };
-  }, [room, isHost]);
-
-  useEffect(() => {
-    if (room?.phase !== 'playing') playStartRef.current = null;
-  }, [room?.phase]);
+  }, [room]);
 
   if (loading) return <Centered>Loading room…</Centered>;
   if (!room)
@@ -306,10 +312,9 @@ export default function Room() {
     if (!isHost || !room) return;
     try {
       const r = generateRound();
-      await setRoomPhase(room.id, 'playing', {
-        sentence: JSON.stringify(r.phrase),
-        letters_26: r.letters,
-      });
+      // start_round atomically sets phase='playing' and stamps
+      // play_started_at — the timer effect reads that stamp.
+      await startRound(room.id, JSON.stringify(r.phrase), r.letters);
     } catch (e) {
       toast.error(sanitizeError(e));
     }

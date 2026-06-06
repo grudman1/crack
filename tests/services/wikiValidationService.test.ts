@@ -305,3 +305,59 @@ describe('validator URL encoding', () => {
     }
   });
 });
+
+// -----------------------------------------------------------------------------
+// Cache poisoning + bypassCache
+// -----------------------------------------------------------------------------
+// A 5xx / 429 from Wikipedia must NOT poison the in-memory summary
+// cache. Previously the catch / non-ok branch cached `null` for every
+// failed response, so a single transient blip silently turned every
+// later validation into a reject for the rest of the session.
+// Companion: bypassCache: true must skip the cache read so admin
+// "Re-run" actually re-hits the live API.
+
+describe('summary cache poisoning + bypassCache', () => {
+  beforeEach(() => {
+    clearValidationCache();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('bypassCache: true bypasses the summary cache for repeat lookups', async () => {
+    let summaryCalls = 0;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.includes('/page/summary/')) {
+        summaryCalls += 1;
+        return new Response(
+          JSON.stringify({
+            title: 'Robin Thicke',
+            type: 'standard',
+            extract: 'Robin Thicke is an American singer.',
+            wikibase_item: 'Q1',
+            content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/Robin_Thicke' } },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('wikidata.org')) {
+        return new Response(
+          JSON.stringify({
+            entities: { Q1: { claims: { P31: [{ mainsnak: { datavalue: { value: { id: 'Q5' } } } } ] } } },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return new Response('null', { status: 404, headers: { 'content-type': 'application/json' } });
+    });
+
+    await validateName('Robin Thicke', { expectedInitials: 'RT', bypassCache: true });
+    const callsAfterFirst = summaryCalls;
+    await validateName('Robin Thicke', { expectedInitials: 'RT', bypassCache: true });
+    // Both runs must have re-fetched the summary; otherwise the inner
+    // caches are silently serving stale data and the bypass is a lie.
+    expect(summaryCalls).toBeGreaterThan(callsAfterFirst);
+  });
+});

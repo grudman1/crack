@@ -530,7 +530,22 @@ function makeHeaders(base: Record<string, string> = {}): Record<string, string> 
   };
 }
 
-async function getSummary(title: string): Promise<WikiSummary | null> {
+// Hard timeout for every Wikipedia/Wikidata fetch. The chain has up
+// to ~10 inner calls per validation; without a ceiling a single hung
+// endpoint can freeze the whole "Validating…" phase.
+const FETCH_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function getSummary(title: string, bypassCache = false): Promise<WikiSummary | null> {
   // CASE-SENSITIVE KEY — Wikipedia REST treats /page/summary/{title}
   // case-sensitively on the URL path, so "robin thicke" (404) and
   // "Robin Thicke" (200) are distinct requests that must NOT share
@@ -538,67 +553,74 @@ async function getSummary(title: string): Promise<WikiSummary | null> {
   // opensearch iterate stage: a lowercase exact-stage 404 returned
   // a cached null when iterate later looked up the properly-cased
   // canonical title.
-  if (summaryCache.has(title)) return summaryCache.get(title) ?? null;
-  let result: WikiSummary | null = null;
+  if (!bypassCache && summaryCache.has(title)) return summaryCache.get(title) ?? null;
+  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+  let res: Response;
   try {
-    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-    const res = await fetch(url, { headers: makeHeaders({ Accept: 'application/json' }) });
-    if (res.ok) result = (await res.json()) as WikiSummary;
+    res = await fetchWithTimeout(url, { headers: makeHeaders({ Accept: 'application/json' }) });
   } catch {
-    result = null;
+    // Network error / timeout — DON'T cache. A transient failure
+    // shouldn't poison the cache for the rest of the session.
+    return null;
   }
-  summaryCache.set(title, result);
-  // Also cache under the post-redirect canonical title so a later
-  // request for that exact-case title reuses the same article.
-  if (result?.title && result.title !== title) {
-    summaryCache.set(result.title, result);
+  if (res.ok) {
+    const result = (await res.json()) as WikiSummary;
+    summaryCache.set(title, result);
+    if (result.title && result.title !== title) summaryCache.set(result.title, result);
+    return result;
   }
-  return result;
+  // Cache only true 404s ("page does not exist" is stable). 5xx /
+  // 429 / etc. are transient — skip the cache so the next attempt
+  // tries again rather than serving stale null.
+  if (res.status === 404) summaryCache.set(title, null);
+  return null;
 }
 
-async function getOpenSearch(query: string): Promise<string[]> {
+async function getOpenSearch(query: string, bypassCache = false): Promise<string[]> {
   const key = query.toLowerCase();
-  if (openSearchCache.has(key)) return openSearchCache.get(key)!;
-  let titles: string[] = [];
+  if (!bypassCache && openSearchCache.has(key)) return openSearchCache.get(key)!;
+  const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=10&format=json&origin=*`;
+  let res: Response;
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=10&format=json&origin=*`;
-    const res = await fetch(url, { headers: makeHeaders() });
-    if (res.ok) {
-      const data = (await res.json()) as unknown;
-      if (Array.isArray(data) && Array.isArray(data[1])) {
-        titles = (data[1] as unknown[]).filter((t): t is string => typeof t === 'string');
-      }
-    }
+    res = await fetchWithTimeout(url, { headers: makeHeaders() });
   } catch {
-    /* empty */
+    return [];
   }
+  if (!res.ok) return [];
+  const data = (await res.json()) as unknown;
+  const titles =
+    Array.isArray(data) && Array.isArray(data[1])
+      ? (data[1] as unknown[]).filter((t): t is string => typeof t === 'string')
+      : [];
   openSearchCache.set(key, titles);
   return titles;
 }
 
-async function getWikidata(qid: string): Promise<{ human: boolean; fictional: boolean } | null> {
-  if (wikidataCache.has(qid)) return wikidataCache.get(qid) ?? null;
-  let result: { human: boolean; fictional: boolean } | null = null;
+async function getWikidata(
+  qid: string,
+  bypassCache = false,
+): Promise<{ human: boolean; fictional: boolean } | null> {
+  if (!bypassCache && wikidataCache.has(qid)) return wikidataCache.get(qid) ?? null;
+  // QIDs are always /^Q\d+$/ in practice but encodeURIComponent is
+  // cheap and gives us defense in depth.
+  const url = `https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(qid)}.json`;
+  let res: Response;
   try {
-    // QIDs are always /^Q\d+$/ in practice but encodeURIComponent
-    // is cheap and gives us defense in depth.
-    const url = `https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(qid)}.json`;
-    const res = await fetch(url, { headers: makeHeaders() });
-    if (res.ok) {
-      const data = (await res.json()) as { entities?: Record<string, WikidataEntity> };
-      const entity = data.entities?.[qid];
-      const claims = entity?.claims?.P31 ?? [];
-      const ids = claims
-        .map((c) => c.mainsnak?.datavalue?.value?.id)
-        .filter((x): x is string => Boolean(x));
-      result = {
-        human: ids.includes('Q5'),
-        fictional: ids.some((q) => FICTIONAL_QIDS.has(q)),
-      };
-    }
+    res = await fetchWithTimeout(url, { headers: makeHeaders() });
   } catch {
-    /* empty */
+    return null;
   }
+  if (!res.ok) return null;
+  const data = (await res.json()) as { entities?: Record<string, WikidataEntity> };
+  const entity = data.entities?.[qid];
+  const claims = entity?.claims?.P31 ?? [];
+  const ids = claims
+    .map((c) => c.mainsnak?.datavalue?.value?.id)
+    .filter((x): x is string => Boolean(x));
+  const result = {
+    human: ids.includes('Q5'),
+    fictional: ids.some((q) => FICTIONAL_QIDS.has(q)),
+  };
   wikidataCache.set(qid, result);
   return result;
 }
@@ -608,26 +630,26 @@ async function getWikidata(qid: string): Promise<{ human: boolean; fictional: bo
 // canonical article as the first wikilink, ordered by Wikipedia's editors
 // in rough prominence order. The action=query prop=links endpoint does NOT
 // preserve this ordering, so we read the raw wikitext.
-async function getDisambigLinks(title: string): Promise<string[]> {
+async function getDisambigLinks(title: string, bypassCache = false): Promise<string[]> {
   const key = title.toLowerCase();
-  if (linksCache.has(key)) return linksCache.get(key)!;
-  const links: string[] = [];
+  if (!bypassCache && linksCache.has(key)) return linksCache.get(key)!;
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=revisions&titles=${encodeURIComponent(title)}&rvprop=content&rvslots=main&formatversion=2&format=json&origin=*&redirects=1`;
+  let res: Response;
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=revisions&titles=${encodeURIComponent(title)}&rvprop=content&rvslots=main&formatversion=2&format=json&origin=*&redirects=1`;
-    const res = await fetch(url, { headers: makeHeaders() });
-    if (res.ok) {
-      const data = (await res.json()) as {
-        query?: { pages?: Array<{ revisions?: Array<{ slots?: { main?: { content?: string } } }> }> };
-      };
-      const wt = data.query?.pages?.[0]?.revisions?.[0]?.slots?.main?.content ?? '';
-      for (const line of wt.split('\n')) {
-        if (!line.trim().startsWith('*')) continue;
-        const m = line.match(/\[\[([^\]|#]+)/);
-        if (m && m[1]) links.push(m[1].trim());
-      }
-    }
+    res = await fetchWithTimeout(url, { headers: makeHeaders() });
   } catch {
-    /* empty */
+    return [];
+  }
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    query?: { pages?: Array<{ revisions?: Array<{ slots?: { main?: { content?: string } } }> }> };
+  };
+  const wt = data.query?.pages?.[0]?.revisions?.[0]?.slots?.main?.content ?? '';
+  const links: string[] = [];
+  for (const line of wt.split('\n')) {
+    if (!line.trim().startsWith('*')) continue;
+    const m = line.match(/\[\[([^\]|#]+)/);
+    if (m && m[1]) links.push(m[1].trim());
   }
   linksCache.set(key, links);
   return links;
@@ -645,12 +667,15 @@ export type PersonKind =
   | 'other'      // Wikidata responded but the entity is neither human nor fictional (place, org, etc.)
   | 'unknown';   // No summary or no Wikidata info and the heuristics didn't trigger
 
-async function isPerson(summary: WikiSummary | null): Promise<{ ok: boolean; kind: PersonKind }> {
+async function isPerson(
+  summary: WikiSummary | null,
+  bypassCache = false,
+): Promise<{ ok: boolean; kind: PersonKind }> {
   if (!summary) return { ok: false, kind: 'unknown' };
   if (summary.type === 'disambiguation') return { ok: false, kind: 'disambig' };
   const qid = summary.wikibase_item;
   if (qid) {
-    const wd = await getWikidata(qid);
+    const wd = await getWikidata(qid, bypassCache);
     if (wd) {
       if (wd.fictional) return { ok: false, kind: 'fictional' };
       if (wd.human) return { ok: true, kind: 'human' };
@@ -717,10 +742,10 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
         note: `trying GET /page/summary/${encodeURIComponent(name)}`,
         detail: { url: `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}` },
       });
-      const exact = await getSummary(name);
+      const exact = await getSummary(name, opts.bypassCache);
       const exactCands = exact ? canonicalInitialsCandidates(exact.title) : [];
       const exactPerson = exact && exact.type === 'standard' && exactCands.includes(expected)
-        ? await isPerson(exact)
+        ? await isPerson(exact, opts.bypassCache)
         : null;
       if (
         exact &&
@@ -851,7 +876,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     note: `GET /page/summary/${encodeURIComponent(name)}`,
     detail: { url: `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}` },
   });
-  const exact = await getSummary(name);
+  const exact = await getSummary(name, opts.bypassCache);
   let exactWasDisambig = false;
   if (exact) {
     if (exact.type === 'disambiguation') {
@@ -868,7 +893,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       const initialsOK = titleCands.includes(targetInitials);
       const ratioOK = wordLengthRatioOK(name, exact.title);
       const personChecked = initialsOK && ratioOK;
-      const personResult = personChecked ? await isPerson(exact) : null;
+      const personResult = personChecked ? await isPerson(exact, opts.bypassCache) : null;
       if (initialsOK && ratioOK && personResult?.ok) {
         trace?.({
           stage: 'exact',
@@ -902,7 +927,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
     });
   }
 
-  const hits = await getOpenSearch(name);
+  const hits = await getOpenSearch(name, opts.bypassCache);
   trace?.({
     stage: 'opensearch',
     label: 'Opensearch (typo-tolerant)',
@@ -933,7 +958,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       });
       continue;
     }
-    const sum = await getSummary(hitTitle);
+    const sum = await getSummary(hitTitle, opts.bypassCache);
     if (!sum || sum.type === 'disambiguation') {
       trace?.({
         stage: 'prefix-connector',
@@ -943,7 +968,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       });
       continue;
     }
-    const prefPerson = await isPerson(sum);
+    const prefPerson = await isPerson(sum, opts.bypassCache);
     if (prefPerson.ok) {
       trace?.({
         stage: 'prefix-connector',
@@ -966,7 +991,7 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
 
   // (d) Disambig wikitext.
   if (exactWasDisambig && exact) {
-    const links = await getDisambigLinks(exact.title);
+    const links = await getDisambigLinks(exact.title, opts.bypassCache);
     let evaluated = 0;
     for (const linkTitle of links) {
       if (evaluated >= 25) break;
@@ -977,10 +1002,10 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
       // style collisions. Failure is silent here (no per-link trace) —
       // the loop already emits a summary miss when nothing matched.
       if (!surnameMatchesCanonical(name, linkTitle)) continue;
-      const sum = await getSummary(linkTitle);
+      const sum = await getSummary(linkTitle, opts.bypassCache);
       if (!sum || sum.type === 'disambiguation') continue;
       evaluated += 1;
-      const disPerson = await isPerson(sum);
+      const disPerson = await isPerson(sum, opts.bypassCache);
       if (disPerson.ok) {
         trace?.({
           stage: 'disambig',
@@ -1073,14 +1098,14 @@ async function _validate(name: string, opts: ValidateOptions): Promise<Validatio
           // helpful diagnostic.
           rejectedBy = nameCheck.firstNameOK ? 'surname' : 'firstName';
         } else {
-          sum = await getSummary(hitTitle);
+          sum = await getSummary(hitTitle, opts.bypassCache);
           qid = sum?.wikibase_item;
           if (!sum || sum.type === 'disambiguation') {
             // No summary to person-check → can't verify → reject.
             rejectedBy = 'person';
             personKind = sum?.type === 'disambiguation' ? 'disambig' : 'unknown';
           } else {
-            const cls = await isPerson(sum);
+            const cls = await isPerson(sum, opts.bypassCache);
             personOK = cls.ok ? 'pass' : 'fail';
             personKind = cls.kind;
             if (personOK !== 'pass') rejectedBy = 'person';

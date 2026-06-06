@@ -20,7 +20,10 @@ export async function createRoom(hostId: string, timerSeconds = 180): Promise<Ro
       .select()
       .single();
     if (!error && data) {
-      await supabase.from('room_players').insert({ room_id: data.id, player_id: hostId });
+      const { error: rpError } = await supabase
+        .from('room_players')
+        .insert({ room_id: data.id, player_id: hostId });
+      if (rpError) throw rpError;
       return data as RoomRow;
     }
     if (error && error.code !== '23505') throw error;
@@ -35,11 +38,32 @@ export async function findRoomByCode(code: string): Promise<RoomRow | null> {
 }
 
 export async function joinRoom(roomId: string, playerId: string): Promise<void> {
-  await supabase.from('room_players').upsert({ room_id: roomId, player_id: playerId }, { onConflict: 'room_id,player_id' });
+  const { error } = await supabase
+    .from('room_players')
+    .upsert({ room_id: roomId, player_id: playerId }, { onConflict: 'room_id,player_id' });
+  if (error) throw error;
 }
 
 export async function leaveRoom(roomId: string, playerId: string): Promise<void> {
-  await supabase.from('room_players').delete().match({ room_id: roomId, player_id: playerId });
+  const { error } = await supabase
+    .from('room_players')
+    .delete()
+    .match({ room_id: roomId, player_id: playerId });
+  if (error) throw error;
+}
+
+export async function startRound(roomId: string, sentence: string, letters: string): Promise<void> {
+  const { error } = await supabase.rpc('start_round', {
+    p_room_id: roomId,
+    p_sentence: sentence,
+    p_letters: letters,
+  });
+  if (error) throw error;
+}
+
+export async function advancePhaseIfExpired(roomId: string): Promise<void> {
+  const { error } = await supabase.rpc('advance_phase_if_expired', { p_room_id: roomId });
+  if (error) throw error;
 }
 
 export async function setRoomPhase(roomId: string, phase: Phase, extras?: Partial<RoomRow>): Promise<void> {
