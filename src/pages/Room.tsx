@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ThumbsDown, ThumbsUp, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { SUPABASE_CONFIGURED } from '@/services/supabase';
 import { useRoom } from '@/hooks/useRoom';
 import { useRoomPlayers } from '@/hooks/useRoomPlayers';
 import { useSubmissions } from '@/hooks/useSubmissions';
@@ -52,6 +53,10 @@ export default function Room() {
   // Anonymous join flow (deep link in incognito, etc.)
   const [joinName, setJoinName] = useState('');
   const [joiningRoom, setJoiningRoom] = useState(false);
+  // Surface anon-sign-in errors inline (not just as a toast) so a
+  // misconfigured anon-auth toggle or transient Supabase blip produces
+  // a visible retry path instead of a one-and-done failure.
+  const [joinError, setJoinError] = useState<string | null>(null);
   // Guard against the joinRoom useEffect firing twice when both the
   // room and user become available in quick succession (e.g. just
   // after an anonymous sign-in).
@@ -229,6 +234,18 @@ export default function Room() {
     };
   }, [room]);
 
+  // Deep-link landing must survive a misconfigured Supabase (e.g. a
+  // bad preview env). Without this gate, useRoom queries the
+  // placeholder URL and the user stares at "Loading room…" forever.
+  if (!SUPABASE_CONFIGURED)
+    return (
+      <Centered>
+        Multiplayer isn&apos;t available right now.{' '}
+        <Link to="/" className="underline">
+          home
+        </Link>
+      </Centered>
+    );
   if (loading) return <Centered>Loading room…</Centered>;
   if (!room)
     return (
@@ -244,6 +261,7 @@ export default function Room() {
       const trimmed = joinName.trim();
       if (!trimmed) return;
       setJoiningRoom(true);
+      setJoinError(null);
       try {
         // signInAnonymously creates the auth user + the profile row
         // (via the handle_new_user trigger). The joinRoom call wired
@@ -256,7 +274,10 @@ export default function Room() {
           /* swallow */
         }
       } catch (e) {
-        toast.error(sanitizeError(e));
+        // Keep the friendly copy inline (not just a toast) so the user
+        // sees what went wrong and a Try again affordance — anon-auth
+        // disabled / network blips are the common path here.
+        setJoinError(sanitizeError(e));
       } finally {
         setJoiningRoom(false);
       }
@@ -294,6 +315,15 @@ export default function Room() {
             />
           </label>
         </div>
+        {joinError && (
+          <div className="mt-4 panel p-3 font-sans text-xs text-error" role="alert">
+            <p>{joinError}</p>
+            <p className="mt-2 text-muted">
+              Tap Try again to retry. If it keeps failing, anonymous play may be
+              disabled — sign up via the menu instead.
+            </p>
+          </div>
+        )}
         <div className="mt-6 flex justify-center">
           <button
             type="button"
@@ -301,7 +331,7 @@ export default function Room() {
             disabled={!joinName.trim() || joiningRoom}
             onClick={() => void handleAnonymousJoin()}
           >
-            {joiningRoom ? 'Joining…' : 'Join room'}
+            {joiningRoom ? 'Joining…' : joinError ? 'Try again' : 'Join room'}
           </button>
         </div>
       </motion.div>

@@ -12,6 +12,12 @@ interface AdminState {
 // nav. The value is stable for the lifetime of the session.
 const adminCache = new Map<string, boolean>();
 
+/** Drop the cached admin flag — call this on sign-out so a stale flag
+ *  can't stick across accounts on a shared browser. */
+export function clearAdminCache(): void {
+  adminCache.clear();
+}
+
 /** Reads profiles.is_admin for the currently-authed user. Refreshes
  *  whenever the auth user changes. Anonymous users are never admin. */
 export function useAdmin(): AdminState {

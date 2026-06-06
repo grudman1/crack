@@ -56,6 +56,10 @@
     margin-right: auto;
     padding-left: 1rem;
     padding-right: 1rem;
+    /* Keep bottom-anchored buttons clear of the iPhone home indicator
+       in the Capacitor wrap. max() so the frame never gets less than
+       the existing 1rem of breathing room on non-notched devices. */
+    padding-bottom: max(var(--safe-bottom), 1rem);
   }
 
   @media (min-width: 1024px) {
@@ -156,8 +160,13 @@
     background-color: transparent;
     border: 1px solid hsl(var(--hairline));
     border-radius: 9999px;
-    padding: 0.375rem 0.875rem;
-    min-height: 2rem;
+    /* iOS HIG wants ≥44px touch targets. Bumped from 2rem → 2.75rem
+       so the validating-phase vote thumbs / copy code / review flag
+       / end-round buttons aren't mistap targets on phone. Width
+       follows from inline-flex + horizontal padding. */
+    padding: 0.5rem 1rem;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
     font-size: 0.8125rem;
     cursor: pointer;
     transition: background-color 150ms ease-out, border-color 150ms ease-out;

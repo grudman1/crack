@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/services/supabase';
+import { clearAdminCache } from '@/hooks/useAdmin';
 
 interface AuthState {
   user: User | null;
@@ -60,6 +61,10 @@ export function useAuth(): AuthState & {
   };
 
   const signOut = async () => {
+    // Drop the cached admin flag before tearing down the session so
+    // a shared browser can't carry a stale `isAdmin: true` into the
+    // next account.
+    clearAdminCache();
     await supabase.auth.signOut();
   };
 
