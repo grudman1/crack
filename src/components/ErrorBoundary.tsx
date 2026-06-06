@@ -8,6 +8,7 @@
 // equivalent in v19.
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 
 interface Props {
   children: ReactNode;
@@ -25,9 +26,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Plain console for now; wire to Sentry or similar if we ever ship
-    // remote error reporting.
     console.error('ErrorBoundary caught:', error, info.componentStack);
+    // Sentry.captureException is a no-op when Sentry.init wasn't run
+    // (no DSN), so this is safe in local dev and CI.
+    Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   handleReload = () => {
