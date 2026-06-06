@@ -14,6 +14,7 @@ export function useAuth(): AuthState & {
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInAnonymously: (displayName: string) => Promise<User>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 } {
   const [state, setState] = useState<AuthState>({ user: null, session: null, loading: true });
 
@@ -68,5 +69,27 @@ export function useAuth(): AuthState & {
     await supabase.auth.signOut();
   };
 
-  return { ...state, signIn, signUp, signInAnonymously, signOut };
+  // Hits the /api/delete-account serverless function with the current
+  // access token; the function uses the service-role key to call
+  // admin.auth.admin.deleteUser, which cascades through every FK in
+  // 0001 (profiles → room_players, submissions, votes, scores, hosted
+  // rooms). On success we tear down the local session too.
+  const deleteAccount = async (): Promise<void> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) throw new Error('Not signed in');
+    const res = await fetch('/api/delete-account', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? 'Deletion failed');
+    }
+    clearAdminCache();
+    await supabase.auth.signOut();
+  };
+
+  return { ...state, signIn, signUp, signInAnonymously, signOut, deleteAccount };
 }
