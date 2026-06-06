@@ -107,11 +107,16 @@ export default function Room() {
     void joinRoom(room.id, user.id).catch(() => {});
   }, [room, user]);
 
+  const leaveRef = useRef<{ roomId: string; userId: string } | null>(null);
+  useEffect(() => {
+    leaveRef.current = room && user ? { roomId: room.id, userId: user.id } : null;
+  }, [room, user]);
+
   useEffect(() => {
     return () => {
-      if (room && user) void leaveRoom(room.id, user.id).catch(() => {});
+      const ru = leaveRef.current;
+      if (ru) void leaveRoom(ru.roomId, ru.userId).catch(() => {});
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

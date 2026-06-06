@@ -14,10 +14,14 @@ export interface RoomPlayer extends RoomPlayerRow {
 export function useRoomPlayers(roomId: string | undefined): RoomPlayer[] {
   const loadFn = useCallback(async () => {
     if (!roomId) return [];
-    const { data: rp } = await supabase
+    const { data: rp, error } = await supabase
       .from('room_players')
       .select('*')
       .eq('room_id', roomId);
+    if (error) {
+      console.error('[useRoomPlayers] failed to load room_players', error);
+      return [];
+    }
     const list = (rp ?? []) as RoomPlayerRow[];
     const playerIds = list.map((p) => p.player_id);
     const profiles: Record<string, ProfileRow> = {};

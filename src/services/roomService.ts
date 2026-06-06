@@ -110,11 +110,11 @@ export async function resetRoomForNewRound(
   letters: string,
   timerSeconds: number,
 ): Promise<void> {
-  await supabase.from('submissions').delete().eq('room_id', roomId);
-  await supabase.from('votes').delete().eq('room_id', roomId);
-  await supabase.from('scores').delete().eq('room_id', roomId);
-  await supabase
-    .from('rooms')
-    .update({ phase: 'lobby', sentence, letters_26: letters, timer_seconds: timerSeconds })
-    .eq('id', roomId);
+  const { error } = await supabase.rpc('reset_room_for_new_round', {
+    p_room_id: roomId,
+    p_sentence: sentence,
+    p_letters: letters,
+    p_timer_seconds: timerSeconds,
+  });
+  if (error) throw error;
 }
