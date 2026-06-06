@@ -117,8 +117,8 @@ export async function fetchVotes(roomId: string): Promise<VoteRow[]> {
   return (data ?? []) as VoteRow[];
 }
 
-export async function computeScores(roomId: string): Promise<void> {
-  const { error } = await supabase.rpc('compute_room_scores', { p_room_id: roomId });
+export async function finalizeRound(roomId: string): Promise<void> {
+  const { error } = await supabase.rpc('finalize_round', { p_room_id: roomId });
   if (error) throw error;
 }
 

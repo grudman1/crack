@@ -9,7 +9,7 @@ import { useSubmissions } from '@/hooks/useSubmissions';
 import { useVotes } from '@/hooks/useVotes';
 import { useScores } from '@/hooks/useScores';
 import {
-  computeScores,
+  finalizeRound,
   joinRoom,
   leaveRoom,
   resetRoomForNewRound,
@@ -322,9 +322,18 @@ export default function Room() {
 
   const handleCompute = async () => {
     if (!isHost || !room) return;
+    // L-E: don't silently zero everyone when no votes have landed yet.
+    if (
+      votes.length === 0 &&
+      !window.confirm('No votes cast yet — everyone will score 0. Compute anyway?')
+    ) {
+      return;
+    }
     try {
-      await computeScores(room.id);
-      await setRoomPhase(room.id, 'results');
+      // finalize_round is host-guarded + atomic: it does the compute
+      // and the phase flip in one transaction, so a vote can't slip
+      // in between them (H-A / M-A / L-C).
+      await finalizeRound(room.id);
     } catch (e) {
       toast.error(sanitizeError(e));
     }
@@ -649,7 +658,23 @@ function ResultsView({
   isHost: boolean;
   onNewRound: () => void;
 }) {
-  const sorted = [...scores].sort((a, b) => b.total - a.total);
+  // M-B: build the leaderboard from current room members merged with
+  // scores. compute_room_scores only writes rows for players who
+  // submitted at least one answer, so a silent joiner would otherwise
+  // vanish from the leaderboard. Fall back to 0 for missing scores.
+  const sorted = useMemo(() => {
+    const scoreByPlayer = new Map(scores.map((s) => [s.player_id, s] as const));
+    const entries = players.map((p) => {
+      const s = scoreByPlayer.get(p.player_id);
+      return {
+        id: s?.id ?? `placeholder:${p.player_id}`,
+        player_id: p.player_id,
+        total: s?.total ?? 0,
+        displayName: p.profile?.display_name ?? 'Player',
+      };
+    });
+    return entries.sort((a, b) => b.total - a.total);
+  }, [players, scores]);
   const me = scores.find((s) => s.player_id === userId);
   const myRows = submissions.filter((s) => s.player_id === userId);
 
@@ -739,18 +764,15 @@ function ResultsView({
       <section className="panel mt-8 p-5">
         <h2 className="font-serif text-lg font-bold text-ink">Leaderboard</h2>
         <ol className="mt-2 space-y-1">
-          {sorted.map((s, idx) => {
-            const player = players.find((p) => p.player_id === s.player_id);
-            return (
-              <li key={s.id} className="flex items-baseline justify-between font-sans text-sm">
-                <span>
-                  <span className="mr-2 text-muted tabular-nums">{idx + 1}.</span>
-                  {player?.profile?.display_name ?? 'Player'}
-                </span>
-                <span className="font-serif text-base font-bold tabular-nums text-ink">{s.total}</span>
-              </li>
-            );
-          })}
+          {sorted.map((s, idx) => (
+            <li key={s.id} className="flex items-baseline justify-between font-sans text-sm">
+              <span>
+                <span className="mr-2 text-muted tabular-nums">{idx + 1}.</span>
+                {s.displayName}
+              </span>
+              <span className="font-serif text-base font-bold tabular-nums text-ink">{s.total}</span>
+            </li>
+          ))}
           {sorted.length === 0 && <li className="font-sans text-sm text-muted">No scores yet.</li>}
         </ol>
       </section>
@@ -765,20 +787,23 @@ function ResultsView({
               <ul className="space-y-1 font-sans text-sm">
                 {Object.entries(me.breakdown ?? {})
                   .sort(([a], [b]) => Number(a) - Number(b))
-                  .map(([row, pts]) => {
+                  .flatMap(([row, pts]) => {
                     const rowIdx = Number(row);
                     const sub = myRows.find((s) => s.row_index === rowIdx);
-                    return (
+                    // M-C: skip blank-name rows so intentionally-empty
+                    // attempts don't clutter the breakdown as `— 0`.
+                    if (!sub?.name?.trim()) return [];
+                    return [
                       <li key={row} className="flex justify-between">
                         <span>
                           <span className="mr-2 font-serif font-bold">
                             {ALPHABET[rowIdx]} · {letters[rowIdx] ?? ''}
                           </span>
-                          {sub?.name ?? '—'}
+                          {sub.name}
                         </span>
                         <span className="tabular-nums text-muted">{pts}</span>
-                      </li>
-                    );
+                      </li>,
+                    ];
                   })}
               </ul>
             </AccordionContent>

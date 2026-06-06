@@ -20,7 +20,12 @@ vi.mock('@/services/supabase', () => {
   };
 });
 
-import { resetRoomForNewRound, startRound, advancePhaseIfExpired } from '@/services/roomService';
+import {
+  resetRoomForNewRound,
+  startRound,
+  advancePhaseIfExpired,
+  finalizeRound,
+} from '@/services/roomService';
 
 beforeEach(() => {
   rpcCalls.length = 0;
@@ -67,6 +72,22 @@ describe('startRound', () => {
     nextRpcError = { message: 'only the host can start a round' };
     await expect(startRound('room-1', 's', 'L')).rejects.toMatchObject({
       message: 'only the host can start a round',
+    });
+  });
+});
+
+describe('finalizeRound', () => {
+  it('calls the finalize_round RPC with the room id', async () => {
+    await finalizeRound('room-1');
+    expect(rpcCalls).toEqual([
+      { fn: 'finalize_round', args: { p_room_id: 'room-1' } },
+    ]);
+  });
+
+  it('rethrows the RPC error (e.g. non-host or wrong phase)', async () => {
+    nextRpcError = { message: 'only the host can finalize, and only during validating' };
+    await expect(finalizeRound('room-1')).rejects.toMatchObject({
+      message: 'only the host can finalize, and only during validating',
     });
   });
 });
