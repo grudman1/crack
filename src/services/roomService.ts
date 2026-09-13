@@ -37,10 +37,18 @@ export async function findRoomByCode(code: string): Promise<RoomRow | null> {
   return (data as RoomRow | null) ?? null;
 }
 
+// ignoreDuplicates makes this INSERT ... ON CONFLICT DO NOTHING rather
+// than DO UPDATE. room_players deliberately has no UPDATE policy (there
+// is nothing on the row a client should ever change), so the DO UPDATE
+// path would be rejected by RLS on every re-join of an existing
+// membership — which happens on any remount, e.g. a refresh mid-round.
 export async function joinRoom(roomId: string, playerId: string): Promise<void> {
   const { error } = await supabase
     .from('room_players')
-    .upsert({ room_id: roomId, player_id: playerId }, { onConflict: 'room_id,player_id' });
+    .upsert(
+      { room_id: roomId, player_id: playerId },
+      { onConflict: 'room_id,player_id', ignoreDuplicates: true },
+    );
   if (error) throw error;
 }
 

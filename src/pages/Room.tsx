@@ -35,6 +35,7 @@ import {
 import { toast } from '@/components/ui/toast';
 import { sanitizeError } from '@/lib/sanitizeError';
 import { buildMultiplayerShareText, type RowOutcome } from '@/lib/share';
+import type { Phase } from '@/types/database';
 import { cn } from '@/lib/utils';
 import { formatToday, getRoundNumber } from '@/services/roundCounter';
 
@@ -113,15 +114,22 @@ export default function Room() {
     void joinRoom(room.id, user.id).catch(() => {});
   }, [room, user]);
 
-  const leaveRef = useRef<{ roomId: string; userId: string } | null>(null);
+  // Leaving is a lobby-only action. Two reasons:
+  //   1. Product: the leaderboard is built from room_players, so a
+  //      player who closed their tab mid-round used to vanish from
+  //      everyone else's results screen.
+  //   2. Security: 0008 restricts room_players INSERT to rooms still in
+  //      'lobby', so dropping the membership mid-round would lock the
+  //      player out of the game they were playing when they came back.
+  const leaveRef = useRef<{ roomId: string; userId: string; phase: Phase } | null>(null);
   useEffect(() => {
-    leaveRef.current = room && user ? { roomId: room.id, userId: user.id } : null;
+    leaveRef.current = room && user ? { roomId: room.id, userId: user.id, phase: room.phase } : null;
   }, [room, user]);
 
   useEffect(() => {
     return () => {
       const ru = leaveRef.current;
-      if (ru) void leaveRoom(ru.roomId, ru.userId).catch(() => {});
+      if (ru && ru.phase === 'lobby') void leaveRoom(ru.roomId, ru.userId).catch(() => {});
     };
   }, []);
 
@@ -153,33 +161,43 @@ export default function Room() {
   }, [answers]);
 
   const writeRow = useCallback(
-    async (i: number, value: string) => {
+    async (i: number, value: string, silent = false) => {
       if (!room || !user) return;
       const letters = room.letters_26 ?? '';
       const initials = `${ALPHABET[i]}${letters[i] ?? ''}`;
       try {
         await upsertSubmission(room.id, user.id, i, initials, value.trim());
       } catch (e) {
-        toast.error(sanitizeError(e));
+        // 0008 restricts submission writes to the 'playing' phase, so the
+        // post-buzzer flush below is expected to be rejected for anything
+        // typed inside the last debounce window. That is the intended
+        // behaviour (it is what stops answers being edited after seeing
+        // everyone else's) and must not surface as an error to the player.
+        if (silent) console.warn('[Room] submission write rejected after the buzzer', e);
+        else toast.error(sanitizeError(e));
       }
     },
     [room, user],
   );
 
-  const flushPendingWrites = useCallback(async () => {
-    const pending = Array.from(pendingWritesRef.current.entries());
-    pendingWritesRef.current.clear();
-    pending.forEach(([, timer]) => window.clearTimeout(timer));
-    await Promise.all(
-      pending.map(([i]) => writeRow(i, answersRef.current[i] ?? '')),
-    );
-  }, [writeRow]);
+  const flushPendingWrites = useCallback(
+    async (silent = false) => {
+      const pending = Array.from(pendingWritesRef.current.entries());
+      pendingWritesRef.current.clear();
+      pending.forEach(([, timer]) => window.clearTimeout(timer));
+      await Promise.all(pending.map(([i]) => writeRow(i, answersRef.current[i] ?? '', silent)));
+    },
+    [writeRow],
+  );
 
   // Flush when leaving the playing phase (validating / results /
-  // back-to-lobby) so no edits get lost on the natural buzzer.
+  // back-to-lobby). By this point the server has already moved on, so
+  // these writes are best-effort and their failures are silent — the
+  // pre-buzzer flush in the timer effect is what actually saves the
+  // last keystrokes.
   useEffect(() => {
     if (room && room.phase !== 'playing') {
-      void flushPendingWrites();
+      void flushPendingWrites(true);
     }
   }, [room?.phase, room, flushPendingWrites]);
 
@@ -218,6 +236,11 @@ export default function Room() {
       const elapsed = Math.floor((Date.now() - start) / 1000);
       const rem = Math.max(0, room.timer_seconds - elapsed);
       setRemaining(rem);
+      // Drain the autosave debounce one tick BEFORE the buzzer, while
+      // the room is still in 'playing' and the write is still allowed.
+      // Without this, anything typed in the last 600 ms is rejected by
+      // the phase check in 0008 and silently lost.
+      if (rem <= 1) void flushPendingWrites();
       if (rem <= 0) {
         // Any room member can advance — the RPC is idempotent and only
         // acts once the timer has actually expired server-side. Previously
@@ -232,7 +255,7 @@ export default function Room() {
       if (tickRef.current) window.clearInterval(tickRef.current);
       tickRef.current = null;
     };
-  }, [room]);
+  }, [room, flushPendingWrites]);
 
   // Deep-link landing must survive a misconfigured Supabase (e.g. a
   // bad preview env). Without this gate, useRoom queries the
