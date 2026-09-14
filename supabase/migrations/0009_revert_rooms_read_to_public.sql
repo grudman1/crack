@@ -15,5 +15,15 @@
 -- Full per-room gating would need a code-lookup RPC + rewiring
 -- useRoom; we'll keep that as a separate decision.
 
+-- 2026-09-14: `drop policy if exists "rooms read all"` added. Without it
+-- this file is not idempotent, and it has to be, because renaming it
+-- from 0006_ to 0009_ means it runs again on every database that already
+-- applied it under the old version. On a fresh database 0005 has left
+-- the policy named "rooms read authed", so dropping that name and
+-- creating "rooms read all" is enough. On production, where this already
+-- ran once as 0006, "rooms read authed" is long gone and "rooms read
+-- all" is present — so the create failed with 42710 and took the whole
+-- migration run down with it, including 0010.
 drop policy if exists "rooms read authed" on public.rooms;
+drop policy if exists "rooms read all" on public.rooms;
 create policy "rooms read all" on public.rooms for select using (true);
