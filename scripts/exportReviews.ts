@@ -123,8 +123,15 @@ for (let from = 0; ; from += PAGE) {
   if (data.length < PAGE) break;
 }
 
+// Omit by deletion rather than by destructuring-and-discarding: the
+// latter needs two throwaway bindings that the lint config rejects.
+const REDACTED_FIELDS = ['user_comment', 'client_fingerprint'] as const;
 const cleaned = REDACT
-  ? rows.map(({ user_comment: _c, client_fingerprint: _f, ...rest }) => rest)
+  ? rows.map((row) => {
+      const copy = { ...row };
+      for (const field of REDACTED_FIELDS) delete copy[field];
+      return copy;
+    })
   : rows;
 
 const payload = {
