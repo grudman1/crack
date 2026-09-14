@@ -1,0 +1,67 @@
+name: Supabase keep-alive
+
+# Supabase pauses free-tier projects after ~7 days with no activity, and
+# the pause is silent: the hostname stops resolving, every multiplayer
+# action fails, and nothing tells you. That happened on 2026-09-13 and
+# took multiplayer, /admin and review submission down until someone
+# noticed by hand.
+#
+# This workflow makes a real authenticated request on a schedule so the
+# project never goes idle. It runs daily rather than weekly so a few
+# consecutive failures still leave days of headroom before the 7-day
+# window closes.
+#
+# The credentials are the same publishable pair that ships in the client
+# bundle — they are public by design and RLS is the boundary (see
+# supabase/migrations/0008_rls_hardening.sql). They live in repo secrets
+# for hygiene, not because they are sensitive.
+#
+# Caveat worth knowing: GitHub disables scheduled workflows on a repo
+# with no pushes for 60 days, and emails the owner first. If this repo
+# ever goes quiet for two months, re-enable it from the Actions tab.
+
+on:
+  schedule:
+    # 07:00 UTC daily. Deliberately not on the hour boundary GitHub is
+    # busiest, since scheduled runs are best-effort and can be delayed.
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY repo secrets are not set."
+            exit 1
+          fi
+
+          # A real query against a real table. A 401/404 would still hit
+          # the API gateway, but only a 200 proves the database itself is
+          # awake and serving.
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 \
+            "${SUPABASE_URL}/rest/v1/rooms?select=code&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}")
+
+          echo "HTTP ${code}"
+          head -c 400 /tmp/body || true
+          echo
+
+          if [ "$code" != "200" ]; then
+            echo "::error::Supabase did not return 200. The project may be paused or restoring."
+            exit 1
+          fi
+          echo "Project is awake."
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          echo "::notice::If this failed because the project is paused, resume it in the"
+          echo "::notice::Supabase dashboard. Restoration took about 45 seconds on 2026-09-13."
