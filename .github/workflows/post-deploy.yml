@@ -1,0 +1,58 @@
+name: Post-deploy smoke
+
+# CI proves the repo is correct. This proves the deployment is.
+#
+# The gap between those two is not theoretical here. `finalize_round` was
+# present and correct in the migrations for months while being absent from
+# the production database, because two files collided on a version number
+# and the integration silently skipped one. Account deletion shipped as
+# "the last App Store blocker" and returned 500 in production the whole
+# time, because its environment variable was never set. Both were found by
+# hand, long after the fact.
+#
+# So: after every push to main, exercise the deployed site. Checks the
+# static routes and assets, the security headers, that every RPC the
+# migrations define actually exists, anonymous auth, realtime, the
+# serverless function, the four Wikimedia endpoints the validator depends
+# on, and a full two-player multiplayer round against production.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: post-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: smoke test production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+
+      # Vercel and the Supabase integration both run off the same push.
+      # Give them time to land before asserting anything about the result.
+      - name: Wait for the deploy and the migration run
+        run: sleep 120
+
+      - name: Smoke test
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TSX_TSCONFIG_PATH: scripts/tsconfig.json
+        run: npx tsx scripts/prodSmoke.ts
+
+      - name: Explain a failure
+        if: failure()
+        run: |
+          echo "::notice::A failing RPC check means a migration did not reach production —"
+          echo "::notice::look at the Supabase integration check on this commit for the SQL error."
+          echo "::notice::A failing api/ check usually means a missing environment variable in Vercel."

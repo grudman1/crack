@@ -31,7 +31,8 @@ function loadEnv(path: string): Record<string, string> {
     const out: Record<string, string> = {};
     for (const line of readFileSync(path, 'utf8').split('\n')) {
       const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m) out[m[1]!] = m[2]!.trim();
+      // `vercel env pull` writes NAME="value"; .env.local writes NAME=value.
+      if (m) out[m[1]!] = m[2]!.trim().replace(/^"(.*)"$/, '$1');
     }
     return out;
   } catch {

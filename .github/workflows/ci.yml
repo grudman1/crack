@@ -1,0 +1,96 @@
+name: CI
+
+# Two jobs, deliberately split by what they can catch.
+#
+# `checks` is the fast one: types, lint, unit tests. It needs nothing but
+# node.
+#
+# `database` stands up a real Postgres with the real migrations and drives
+# the real flows against it. It exists because multiplayer was broken in
+# production for months — public.finalize_round was missing after two
+# migrations collided on a `0006` prefix — and every test in the repo
+# passed the whole time, because none of them touched the database.
+#
+# Neither job can catch "the migrations did not reach production". That is
+# what post-deploy.yml is for.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: types, lint, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # `npm run build` is the type check — it runs `tsc -b` first.
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+
+  database:
+    name: RLS + multiplayer round-trip
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase
+        run: supabase start
+
+      # Every policy in the migrations, exercised as a hostile client
+      # holding only the publishable anon key, plus a full two-player
+      # round through create / join / start / submit / vote / finalize /
+      # score / reset.
+      - name: RLS matrix and multiplayer round-trip
+        run: npm run test:rls
+
+      # Migrations have to be safely re-appliable. 0009 was not, because
+      # its drop and its create named different policies — it worked once
+      # on a fresh database and failed on every database that already had
+      # it, which took down the whole migration run in production and
+      # blocked an unrelated fix behind it.
+      - name: Migrations are re-appliable
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          failed=0
+          for f in supabase/migrations/*.sql; do
+            if psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f" >/tmp/apply.log 2>&1; then
+              echo "ok   $(basename "$f")"
+            else
+              echo "FAIL $(basename "$f")"
+              grep -m3 -i error /tmp/apply.log || cat /tmp/apply.log
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::At least one migration is not idempotent. It will break any environment that already applied it."
+            exit 1
+          fi
+
+      - name: Supabase logs on failure
+        if: failure()
+        run: supabase status || true
