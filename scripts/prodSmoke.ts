@@ -26,7 +26,8 @@ function loadEnv(path: string): Record<string, string> {
     const out: Record<string, string> = {};
     for (const line of readFileSync(path, 'utf8').split('\n')) {
       const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m) out[m[1]!] = m[2]!.trim();
+      // `vercel env pull` writes NAME="value"; .env.local writes NAME=value.
+      if (m) out[m[1]!] = m[2]!.trim().replace(/^"(.*)"$/, '$1');
     }
     return out;
   } catch {
@@ -363,9 +364,18 @@ const main = async () => {
   if (first) {
     await checkRpcInventory(first.client);
     await checkRealtime(first.client);
-    const { data } = await first.client.auth.getSession();
-    if (data.session) await checkDeleteAccount(data.session.access_token);
     if (!process.argv.includes('--skip-mp')) await checkMultiplayer(first);
+    // Deletion runs last and on its own user, because it deletes the
+    // account it authenticates with. Sharing a user with the multiplayer
+    // round-trip meant the room insert failed on a foreign key to a
+    // player that had just been removed.
+    try {
+      const doomed = await anon('smoke-delete');
+      const { data } = await doomed.client.auth.getSession();
+      if (data.session) await checkDeleteAccount(data.session.access_token);
+    } catch (e) {
+      add('api', 'delete-account POST (Apple 5.1.1(v))', 'FAIL', `could not create a probe user: ${(e as Error).message}`);
+    }
   }
   await checkWikimedia();
   await checkSentry();
