@@ -47,6 +47,15 @@
 -- find_room_by_code RPC plus a client rewire of useRoom's initial load
 -- (the RPC is created below so the follow-up needs no new migration).
 --
+-- Shipping alongside: 0006_revert_rooms_read_to_public.sql is renamed to
+-- 0009_. It shared the `0006` prefix with
+-- 0006_finalize_round_and_scoring_fixes.sql, and the CLI derives a
+-- migration's version from that prefix, so replaying both violated the
+-- primary key on supabase_migrations.schema_migrations and the schema
+-- could not be stood up locally at all. Only 0001, 0005 and the renamed
+-- file touch the `rooms` SELECT policy, so running the revert last
+-- produces an identical final schema. Content is untouched.
+--
 -- Client changes that ship WITH this migration (see the same commit):
 --   * roomService.joinRoom uses ON CONFLICT DO NOTHING, so a re-join of
 --     an existing membership never takes the UPDATE path (room_players

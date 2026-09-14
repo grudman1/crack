@@ -56,18 +56,8 @@ max_client_conn = 100
 # secret_key = "env(SECRET_VALUE)"
 
 [db.migrations]
-# WORKAROUND (2026-09-13): disabled on purpose. Two migrations share the
-# `0006` prefix (0006_finalize_round_and_scoring_fixes.sql and
-# 0006_revert_rooms_read_to_public.sql). The CLI derives the version from
-# the numeric prefix, so replaying them both violates the primary key on
-# supabase_migrations.schema_migrations and `supabase start` aborts.
-# Until the prefixes are de-duplicated, the migration files are applied
-# through [db.seed] below instead, in lexicographic filename order —
-# which is the same order the files are meant to run in.
-# NOTE: this also makes `supabase db push` skip migrations. Nothing in
-# this repo uses db push; production is applied by the Supabase GitHub
-# integration on push to main.
-enabled = false
+# If disabled, migrations will be skipped during a db push or reset.
+enabled = true
 # Specifies an ordered list of schema files, directories, or glob patterns that describe your database.
 # Supports paths relative to supabase directory: "./schemas/*.sql", "./database".
 schema_paths = []
@@ -75,9 +65,9 @@ schema_paths = []
 [db.seed]
 # If enabled, seeds the database after migrations during a db reset.
 enabled = true
-# See the note in [db.migrations]: the migration files are loaded here so
-# a local stack can be stood up for the RLS test suite (npm run test:rls).
-sql_paths = ["./migrations/*.sql"]
+# Specifies an ordered list of seed files to load during db reset.
+# Supports glob patterns relative to supabase directory: "./seeds/*.sql"
+sql_paths = ["./seed.sql"]
 
 [db.network_restrictions]
 # Enable management of network restrictions.
